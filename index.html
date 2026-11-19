@@ -55,6 +55,12 @@ p { margin: 0; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 legend { padding: 0; font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+.seg { position: relative; display: flex; gap: 8px; flex-wrap: wrap; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 18px; cursor: pointer; font-weight: 500; background: var(--surface); font-variant-numeric: tabular-nums; }
+.seg input:checked + label { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.seg input:focus-visible + label { outline: 3px solid var(--accent); outline-offset: 2px; }
+.note { font-size: 13px; color: var(--muted); }
 .lvs { position: relative; display: grid; gap: 8px; }
 .lvs input { position: absolute; opacity: 0; pointer-events: none; }
 .lvs label { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; align-items: baseline; border: 1.5px solid var(--line); border-radius: 12px; padding: 10px 14px; cursor: pointer; background: var(--surface); }
@@ -114,6 +120,9 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .wi .ans { font-size: 14px; }
 .wi .ans b { color: var(--good); font-family: var(--font-en); font-size: 16px; }
 .wi .ans s { color: var(--bad); }
+#nick { width: 100%; font: inherit; font-size: 18px; padding: 10px 14px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); }
+#nick:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.nicklab { display: block; font-weight: 700; font-size: 14px; margin-bottom: 6px; }
 textarea { width: 100%; min-height: 120px; font: inherit; font-size: 14px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
 @media (prefers-reduced-motion: reduce) { .bar.time > i { transition: none; } }
 </style>
@@ -128,11 +137,26 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 14px; backg
     </div>
     <div class="card">
       <p class="muted">從認單字開始，一關一關闖到段考難度。每題選一個答案，或把單字打出來，答完馬上告訴你為什麼。</p>
+      <div id="nickBox" hidden>
+        <label class="nicklab" for="nick">你的暱稱</label>
+        <input id="nick" type="text" maxlength="20" autocomplete="off" placeholder="例如：小明（不用寫全名）">
+      </div>
       <fieldset>
         <legend>選一關</legend>
         <div class="lvs" id="lvBox"></div>
       </fieldset>
-      <label class="toggle"><input type="checkbox" id="shuffleOn" checked><span>每一關打亂題目順序</span></label>
+      <fieldset>
+        <legend>每一關出幾題？</legend>
+        <div class="seg" id="countSeg">
+          <input type="radio" name="count" id="n5" value="5"><label for="n5">5</label>
+          <input type="radio" name="count" id="n10" value="10" checked><label for="n10">10</label>
+          <input type="radio" name="count" id="n15" value="15"><label for="n15">15</label>
+          <input type="radio" name="count" id="n20" value="20"><label for="n20">20</label>
+          <input type="radio" name="count" id="n25" value="25"><label for="n25">25</label>
+        </div>
+        <p class="note" id="countNote" hidden></p>
+      </fieldset>
+      <label class="toggle"><input type="checkbox" id="shuffleOn" checked><span>隨機抽題（取消就照題庫順序）</span></label>
       <label class="toggle"><input type="checkbox" id="timerOn" checked><span>限時作答（選擇題 25 秒，拼寫 40 秒）</span></label>
       <div class="btns"><button class="btn" id="goBtn">開始</button></div>
     </div>
@@ -171,6 +195,8 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 14px; backg
       <div class="eyebrow">這一輪的結果</div>
       <div class="score"><span id="rs">0</span><small> / <span id="rt">0</span></small></div>
       <p id="rmsg"></p>
+      <p class="muted" id="sendMsg" hidden></p>
+      <div class="btns"><button class="btn ghost" id="resendBtn" type="button" hidden>再傳一次</button></div>
       <div id="cats" style="display:flex;flex-direction:column;gap:8px"></div>
     </div>
     <div class="card" id="wrongCard">
@@ -191,1005 +217,338 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 14px; backg
 <script>
 (function () {
   var Q = [
- {
-  "lv": 1,
-  "c": "單字",
-  "q": "哪一個字是「螞蟻」？",
-  "a": "ant",
-  "o": [
-   "ant",
-   "and",
-   "any",
-   "art"
-  ],
-  "t": "ant ＝ 螞蟻。and 是「和」，any 是「任何的」，長得像但意思不同。"
- },
- {
-  "lv": 1,
-  "c": "單字",
-  "q": "哪一個字是「烏鴉」？",
-  "a": "crow",
-  "o": [
-   "crow",
-   "cow",
-   "goose",
-   "duck"
-  ],
-  "t": "crow ＝ 烏鴉。cow ＝ 牛，只差一個 r，要看清楚。"
- },
- {
-  "lv": 1,
-  "c": "單字",
-  "q": "哪一個字是「青蛙」？",
-  "a": "frog",
-  "o": [
-   "frog",
-   "fog",
-   "from",
-   "front"
-  ],
-  "t": "frog ＝ 青蛙。fog 是霧，from 是「從」。"
- },
- {
-  "lv": 1,
-  "c": "單字",
-  "q": "哪一個字是「鳥嘴」？",
-  "a": "beak",
-  "o": [
-   "beak",
-   "back",
-   "bake",
-   "bean"
-  ],
-  "t": "beak ＝ 鳥嘴。back 是「回原處」，bake 是烤。"
- },
- {
-  "lv": 1,
-  "c": "單字",
-  "q": "哪一個字是「森林」？",
-  "a": "forest",
-  "o": [
-   "forest",
-   "floor",
-   "front",
-   "fruit"
-  ],
-  "t": "forest ＝ 森林。floor 是地板。"
- },
- {
-  "lv": 1,
-  "c": "單字",
-  "q": "哪一個字是「地圖」？",
-  "a": "map",
-  "o": [
-   "map",
-   "mop",
-   "mat",
-   "top"
-  ],
-  "t": "map ＝ 地圖。top 是頂端。"
- },
- {
-  "lv": 1,
-  "c": "單字",
-  "q": "哪一個字是「口渴的」？",
-  "a": "thirsty",
-  "o": [
-   "thirsty",
-   "thirty",
-   "third",
-   "thirteen"
-  ],
-  "t": "thirsty ＝ 口渴，thirty ＝ 30，third 是第三，thirteen ＝ 13。四個字很像，考試常考。"
- },
- {
-  "lv": 1,
-  "c": "單字",
-  "q": "哪一個字是「完成；結束」？",
-  "a": "finish",
-  "o": [
-   "finish",
-   "fish",
-   "first",
-   "finally"
-  ],
-  "t": "finish ＝ 完成。fish 是魚，first 是第一，finally 是最後。"
- },
- {
-  "lv": 1,
-  "c": "單字",
-  "q": "哪一個字是「晴朗的；清楚的」？",
-  "a": "clear",
-  "o": [
-   "clear",
-   "close",
-   "clean",
-   "crow"
-  ],
-  "t": "clear ＝ 晴朗的、清楚的。close 是「接近地」，clean 是乾淨的。"
- },
- {
-  "lv": 1,
-  "c": "時間／數字",
-  "q": "quarter 是什麼意思？",
-  "a": "四分之一；一刻鐘（15 分鐘）",
-  "o": [
-   "四分之一；一刻鐘（15 分鐘）",
-   "一半",
-   "一小時",
-   "一百"
-  ],
-  "t": "quarter ＝ 四分之一，一小時的四分之一就是 15 分鐘。half 才是一半。"
- },
- {
-  "lv": 1,
-  "c": "單字",
-  "q": "hour 是什麼意思？",
-  "a": "小時",
-  "o": [
-   "小時",
-   "一半",
-   "工作",
-   "中間"
-  ],
-  "t": "hour ＝ 小時。half 是一半，job 是工作，middle 是中間。"
- },
- {
-  "lv": 1,
-  "c": "時間／數字",
-  "q": "thirteen 是多少？",
-  "a": "13",
-  "o": [
-   "13",
-   "30",
-   "3",
-   "31"
-  ],
-  "t": "-teen 結尾是 13 到 19，-ty 結尾是 30、40、50……。thirteen ＝ 13，thirty ＝ 30。"
- },
- {
-  "lv": 1,
-  "c": "介系詞／連接詞",
-  "q": "into 是什麼意思？",
-  "a": "進入；到…裡面",
-  "o": [
-   "進入；到…裡面",
-   "經過",
-   "沿著",
-   "穿越"
-  ],
-  "t": "into ＝ 進入。past 是經過，along 是沿著，through 是穿越。"
- },
- {
-  "lv": 1,
-  "c": "介系詞／連接詞",
-  "q": "before 是什麼意思？",
-  "a": "在…之前",
-  "o": [
-   "在…之前",
-   "在…之後",
-   "當…的時候",
-   "然後"
-  ],
-  "t": "before ＝ 在…之前，after ＝ 在…之後，when ＝ 當…的時候。"
- },
- {
-  "lv": 1,
-  "c": "拼寫",
-  "k": "spell",
-  "q": "A ___ says quack, quack.",
-  "h": "鴨",
-  "a": "duck",
-  "p": 1,
-  "t": "duck ＝ 鴨。"
- },
- {
-  "lv": 1,
-  "c": "拼寫",
-  "k": "spell",
-  "q": "A ___ is a big white bird. It is bigger than a duck.",
-  "h": "鵝",
-  "a": "goose",
-  "p": 1,
-  "t": "goose ＝ 鵝，複數是 geese。"
- },
- {
-  "lv": 1,
-  "c": "拼寫",
-  "k": "spell",
-  "q": "Let's swim in the ___.",
-  "h": "池；游泳池",
-  "a": "pool",
-  "p": 1,
-  "t": "pool ＝ 池、游泳池。兩個 o。"
- },
- {
-  "lv": 1,
-  "c": "拼寫",
-  "k": "spell",
-  "q": "There is some candy in the ___.",
-  "h": "罐子",
-  "a": "jar",
-  "p": 1,
-  "t": "jar ＝ 罐子。"
- },
- {
-  "lv": 1,
-  "c": "拼寫",
-  "k": "spell",
-  "q": "One ___ has sixty minutes.",
-  "h": "小時",
-  "a": "hour",
-  "p": 1,
-  "t": "hour ＝ 小時。h 不發音，但還是要寫。"
- },
- {
-  "lv": 1,
-  "c": "拼寫",
-  "k": "spell",
-  "q": "The monster is big and ___.",
-  "h": "醜陋的",
-  "a": "ugly",
-  "p": 1,
-  "t": "ugly ＝ 醜陋的。"
- },
- {
-  "lv": 2,
-  "c": "字形變化",
-  "q": "One goose, two ___.",
-  "a": "geese",
-  "o": [
-   "geese",
-   "gooses",
-   "goosees",
-   "goose"
-  ],
-  "t": "goose 的複數是不規則的：geese。"
- },
- {
-  "lv": 2,
-  "c": "字形變化",
-  "q": "Cut the cake into two ___.",
-  "a": "halves",
-  "o": [
-   "halves",
-   "halfs",
-   "halfes",
-   "half"
-  ],
-  "t": "half 的複數是 halves（f 變成 ves）。"
- },
- {
-  "lv": 2,
-  "c": "字形變化",
-  "q": "Yesterday, the crow ___ some water.",
-  "a": "drank",
-  "o": [
-   "drank",
-   "drinked",
-   "drinks",
-   "drinking"
-  ],
-  "t": "drink 的過去式是不規則的：drank。看到 Yesterday 就用過去式。"
- },
- {
-  "lv": 2,
-  "c": "字形變化",
-  "q": "The bird ___ over the forest yesterday.",
-  "a": "flew",
-  "o": [
-   "flew",
-   "flied",
-   "flyed",
-   "flying"
-  ],
-  "t": "fly 的過去式是不規則的：flew。"
- },
- {
-  "lv": 2,
-  "c": "字形變化",
-  "q": "The boy ___ a rock into the pool.",
-  "a": "dropped",
-  "o": [
-   "dropped",
-   "droped",
-   "drops",
-   "dropping"
-  ],
-  "t": "drop 結尾是「短母音＋子音」，過去式要重複 p 再加 ed：dropped。"
- },
- {
-  "lv": 2,
-  "c": "字形變化",
-  "q": "Mom is ___ the clothes now.",
-  "a": "drying",
-  "o": [
-   "drying",
-   "dring",
-   "dried",
-   "dryed"
-  ],
-  "t": "is 後面接 Ving。dry 直接加 ing：drying。過去式才是 dried。"
- },
- {
-  "lv": 2,
-  "c": "字形變化",
-  "q": "I ___ my keys under the bed yesterday.",
-  "a": "found",
-  "o": [
-   "found",
-   "finded",
-   "find",
-   "finding"
-  ],
-  "t": "find 的過去式是不規則的：found。"
- },
- {
-  "lv": 2,
-  "c": "字形變化",
-  "q": "Look! The sun is ___.",
-  "a": "shining",
-  "o": [
-   "shining",
-   "shineing",
-   "shinning",
-   "shined"
-  ],
-  "t": "shine 結尾是 e，去掉 e 再加 ing：shining。"
- },
- {
-  "lv": 2,
-  "c": "時間／數字",
-  "q": "7:15 的英文怎麼說？",
-  "a": "a quarter after seven",
-  "o": [
-   "a quarter after seven",
-   "a quarter to seven",
-   "fifteen to seven",
-   "seven past fifteen"
-  ],
-  "t": "quarter ＝ 15 分鐘。過了 15 分，就是 a quarter after（或 past）seven。"
- },
- {
-  "lv": 2,
-  "c": "時間／數字",
-  "q": "10:55 的英文怎麼說？",
-  "a": "five to eleven",
-  "o": [
-   "five to eleven",
-   "five past eleven",
-   "fifty to ten",
-   "five to ten"
-  ],
-  "t": "to ＝ 還差幾分到下一個小時。還差 5 分到 11 點，就是 five to eleven。"
- },
- {
-  "lv": 2,
-  "c": "時間／數字",
-  "q": "6:30 的英文怎麼說？",
-  "a": "half past six",
-  "o": [
-   "half past six",
-   "half to six",
-   "a quarter past six",
-   "thirty to six"
-  ],
-  "t": "half ＝ 一半（30 分）。6 點過了一半，就是 half past six。"
- },
- {
-  "lv": 2,
-  "c": "時間／數字",
-  "q": "Twelve plus eight is ___.",
-  "a": "twenty",
-  "o": [
-   "twenty",
-   "eighty",
-   "eighteen",
-   "twelve"
-  ],
-  "t": "12 + 8 ＝ 20 ＝ twenty。eighty 是 80，eighteen 是 18。"
- },
- {
-  "lv": 2,
-  "c": "介系詞／連接詞",
-  "q": "We walked ___ the forest and came out on the other side.",
-  "a": "through",
-  "o": [
-   "through",
-   "into",
-   "along",
-   "past"
-  ],
-  "t": "through ＝ 穿越，從這一頭走到另一頭。"
- },
- {
-  "lv": 2,
-  "c": "介系詞／連接詞",
-  "q": "The bus went ___ my school without stopping.",
-  "a": "past",
-  "o": [
-   "past",
-   "pass",
-   "into",
-   "along"
-  ],
-  "t": "past 當介系詞＝經過。pass 是動詞，要說 passed。"
- },
- {
-  "lv": 2,
-  "c": "介系詞／連接詞",
-  "q": "I brush my teeth ___ I go to bed.",
-  "a": "before",
-  "o": [
-   "before",
-   "after",
-   "when",
-   "either"
-  ],
-  "t": "先刷牙，再睡覺。before ＝ 在…之前。"
- },
- {
-  "lv": 2,
-  "c": "介系詞／連接詞",
-  "q": "I can't swim. My brother can't swim, ___.",
-  "a": "either",
-  "o": [
-   "either",
-   "too",
-   "then",
-   "together"
-  ],
-  "t": "否定句的「也不」用 either。有 can't 就想 either。"
- },
- {
-  "lv": 2,
-  "c": "片語",
-  "q": "I'm ___ my keys. I can't find them.",
-  "a": "looking for",
-  "o": [
-   "looking for",
-   "looking at",
-   "picking up",
-   "thinking of"
-  ],
-  "t": "look for ＝ 尋找。look at 是「看」。"
- },
- {
-  "lv": 2,
-  "c": "拼寫",
-  "k": "spell",
-  "q": "It's a ___ past nine.",
-  "h": "四分之一；十五分鐘",
-  "a": "quarter",
-  "p": 1,
-  "t": "a quarter past nine ＝ 9:15。"
- },
- {
-  "lv": 2,
-  "c": "拼寫",
-  "k": "spell",
-  "q": "I like the ___ of the story. It starts with a crow.",
-  "h": "開頭",
-  "a": "beginning",
-  "p": 1,
-  "t": "beginning ＝ 開頭，中間的 n 要寫兩個。"
- },
- {
-  "lv": 2,
-  "c": "拼寫",
-  "k": "spell",
-  "q": "Let's go to school ___.",
-  "h": "一起",
-  "a": "together",
-  "p": 1,
-  "t": "together ＝ 一起。"
- },
- {
-  "lv": 2,
-  "c": "拼寫",
-  "k": "spell",
-  "q": "I want some water. I am ___.",
-  "h": "口渴的",
-  "a": "thirsty",
-  "p": 0,
-  "t": "thirsty ＝ 口渴的。不要寫成 thirty。"
- },
- {
-  "lv": 2,
-  "c": "拼寫",
-  "k": "spell",
-  "q": "Yesterday I ___ a lot of water.",
-  "h": "drink 的過去式",
-  "a": "drank",
-  "p": 0,
-  "t": "drink → drank。"
- },
- {
-  "lv": 2,
-  "c": "拼寫",
-  "k": "spell",
-  "q": "Look! A bird is ___ in the sky.",
-  "h": "fly 的 Ving",
-  "a": "flying",
-  "p": 0,
-  "t": "fly → flying，y 不變。"
- },
- {
-  "lv": 2,
-  "c": "拼寫",
-  "k": "spell",
-  "q": "He walked for an hour and ___ got home.",
-  "h": "最後",
-  "a": "finally",
-  "p": 0,
-  "t": "finally ＝ 最後，有兩個 l。"
- },
- {
-  "lv": 3,
-  "c": "單字",
-  "q": "The crow was so ___ that he wanted to drink some water at once.",
-  "a": "thirsty",
-  "o": [
-   "thirsty",
-   "ugly",
-   "dry",
-   "clear"
-  ],
-  "t": "thirsty ＝ 口渴的。人口渴用 thirsty，dry 是東西乾乾的。"
- },
- {
-  "lv": 3,
-  "c": "單字",
-  "q": "The crow dropped a ___ into the jar, and the water went up.",
-  "a": "rock",
-  "o": [
-   "rock",
-   "beak",
-   "joy",
-   "job"
-  ],
-  "t": "rock ＝ 岩石、石頭。丟石頭進去，水位才會上升。"
- },
- {
-  "lv": 3,
-  "c": "單字",
-  "q": "We climbed to the ___ of the mountain and saw the whole forest.",
-  "a": "top",
-  "o": [
-   "top",
-   "beginning",
-   "middle",
-   "quarter"
-  ],
-  "t": "the top of the mountain ＝ 山頂。"
- },
- {
-  "lv": 3,
-  "c": "單字",
-  "q": "Please look at the ___. It shows where the pool and the forest are.",
-  "a": "map",
-  "o": [
-   "map",
-   "jar",
-   "beak",
-   "job"
-  ],
-  "t": "map ＝ 地圖，會告訴我們東西在哪裡。"
- },
- {
-  "lv": 3,
-  "c": "單字",
-  "q": "The sky is ___ today, so we can see the sun and the mountains.",
-  "a": "clear",
-  "o": [
-   "clear",
-   "ugly",
-   "dry",
-   "thirsty"
-  ],
-  "t": "clear ＝ 晴朗的。天空晴朗才看得到太陽和山。"
- },
- {
-  "lv": 3,
-  "c": "時間／數字",
-  "q": "It's a ___ to nine. We must leave for school now.",
-  "a": "quarter",
-  "o": [
-   "quarter",
-   "half",
-   "hour",
-   "job"
-  ],
-  "t": "a quarter to nine ＝ 8:45（還差 15 分到 9 點）。"
- },
- {
-  "lv": 3,
-  "c": "時間／數字",
-  "q": "It was five ___ eleven. The class was almost over.",
-  "a": "to",
-  "o": [
-   "to",
-   "past",
-   "after",
-   "along"
-  ],
-  "t": "five to eleven ＝ 10:55。還差 5 分到 11 點用 to。"
- },
- {
-  "lv": 3,
-  "c": "介系詞／連接詞",
-  "q": "The frog jumped ___ the pool and swam to the other side.",
-  "a": "into",
-  "o": [
-   "into",
-   "along",
-   "past",
-   "through"
-  ],
-  "t": "into ＝ 進入。青蛙從外面跳進水池。"
- },
- {
-  "lv": 3,
-  "c": "介系詞／連接詞",
-  "q": "We walked ___ the river and saw a duck and a goose.",
-  "a": "along",
-  "o": [
-   "along",
-   "into",
-   "either",
-   "then"
-  ],
-  "t": "along ＝ 沿著。沿著河邊走。"
- },
- {
-  "lv": 3,
-  "c": "介系詞／連接詞",
-  "q": "The ducks swam ___ and forth in the pool.",
-  "a": "back",
-  "o": [
-   "back",
-   "then",
-   "close",
-   "together"
-  ],
-  "t": "back and forth ＝ 來回地。"
- },
- {
-  "lv": 3,
-  "c": "介系詞／連接詞",
-  "q": "I wash my hands ___ dinner, so my hands are clean when I eat.",
-  "a": "before",
-  "o": [
-   "before",
-   "after",
-   "then",
-   "either"
-  ],
-  "t": "吃飯前先洗手，所以用 before。"
- },
- {
-  "lv": 3,
-  "c": "介系詞／連接詞",
-  "q": "I can't swim, and my sister can't swim, ___.",
-  "a": "either",
-  "o": [
-   "either",
-   "too",
-   "then",
-   "back"
-  ],
-  "t": "否定句的「也不」用 either，肯定句才用 too。"
- },
- {
-  "lv": 3,
-  "c": "片語",
-  "q": "My teacher is proud ___ us because we all passed the test.",
-  "a": "of",
-  "o": [
-   "of",
-   "at",
-   "in",
-   "for"
-  ],
-  "t": "be proud of ＝ 以…為榮。"
- },
- {
-  "lv": 3,
-  "c": "字形變化",
-  "q": "The crow ___ a rock yesterday and dropped it into the jar.",
-  "a": "picked",
-  "o": [
-   "picked",
-   "picks",
-   "picking",
-   "pick"
-  ],
-  "t": "Yesterday 表示過去，用過去式：picked。"
- },
- {
-  "lv": 3,
-  "c": "字形變化",
-  "q": "Look! The crow is ___ up a rock.",
-  "a": "picking",
-  "o": [
-   "picking",
-   "picked",
-   "picks",
-   "to pick"
-  ],
-  "t": "is 後面接 Ving：is picking up。"
- },
- {
-  "lv": 3,
-  "c": "字形變化",
-  "q": "When Ann was walking in the forest, she ___ a beautiful bird.",
-  "a": "found",
-  "o": [
-   "found",
-   "finds",
-   "finding",
-   "find"
-  ],
-  "t": "was walking 是過去，所以另一個動作也用過去式：find → found。"
- },
- {
-  "lv": 3,
-  "c": "文法",
-  "q": "Tim: What was the crow ___ at that time?\nAnn: It was ___ for water.",
-  "a": "doing; looking",
-  "o": [
-   "doing; looking",
-   "do; look",
-   "did; looked",
-   "doing; looks"
-  ],
-  "t": "問句用 was，所以是過去進行式 was + Ving：doing、looking。"
- },
- {
-  "lv": 3,
-  "c": "文法",
-  "q": "She enjoys ___ along the river after dinner.",
-  "a": "walking",
-  "o": [
-   "walking",
-   "walk",
-   "walks",
-   "to walk"
-  ],
-  "t": "enjoy 後面接 Ving。enjoy walking。"
- },
- {
-  "lv": 3,
-  "c": "拼寫",
-  "k": "spell",
-  "q": "We walked ___ the dark forest and found a small house.",
-  "h": "穿越",
-  "a": "through",
-  "p": 0,
-  "t": "through ＝ 穿越。字尾是 -ough，要記熟。"
- },
- {
-  "lv": 3,
-  "c": "拼寫",
-  "k": "spell",
-  "q": "I'm hungry. I want to eat ___.",
-  "h": "某物；某事",
-  "a": "something",
-  "p": 0,
-  "t": "something ＝ 某物。some + thing，兩個字合在一起。"
- },
- {
-  "lv": 3,
-  "c": "拼寫",
-  "k": "spell",
-  "q": "Yesterday, the boy ___ a rock into the jar.",
-  "h": "drop 的過去式",
-  "a": "dropped",
-  "p": 0,
-  "t": "drop → dropped，要重複 p。"
- },
- {
-  "lv": 3,
-  "c": "拼寫",
-  "k": "spell",
-  "q": "They ___ for the bus for twenty minutes yesterday.",
-  "h": "wait 的過去式",
-  "a": "waited",
-  "p": 0,
-  "t": "wait → waited，直接加 ed，不用重複 t。"
- },
- {
-  "n": 11,
-  "c": "單字",
-  "q": "Mom walked ___ the living room, and we were there waiting for her.",
-  "a": "into",
-  "o": [
-   "along",
-   "into",
-   "until",
-   "above"
-  ],
-  "t": "into ＝ 進入。媽媽走進客廳，是從外面到裡面。along 是沿著，until 是直到，above 是在上方。",
-  "lv": 4
- },
- {
-  "n": 12,
-  "c": "單字",
-  "q": "We must follow the following tips to save our food when we see many ___ in the kitchen.",
-  "a": "ants",
-  "o": [
-   "pools",
-   "jars",
-   "ants",
-   "forests"
-  ],
-  "t": "ants ＝ 螞蟻。廚房裡看到很多螞蟻，就要把食物收好。pool、forest 不會出現在廚房。",
-  "lv": 4
- },
- {
-  "n": 13,
-  "c": "單字",
-  "q": "Most students can ___ the English test because it is so easy.",
-  "a": "pass",
-  "o": [
-   "drop",
-   "fly",
-   "dry",
-   "pass"
-  ],
-  "t": "pass the test ＝ 通過考試。drop 是掉落，fly 是飛，dry 是弄乾。",
-  "lv": 4
- },
- {
-  "n": 14,
-  "c": "單字",
-  "q": "Helen is very ___ and always thinks she's right, even when others don't agree with her.",
-  "a": "proud",
-  "o": [
-   "proud",
-   "close",
-   "top",
-   "clear"
-  ],
-  "t": "proud ＝ 驕傲的，這裡指自以為是。close 是靠近，top 是頂端，clear 是清楚的。",
-  "lv": 4
- },
- {
-  "n": 18,
-  "c": "單字",
-  "q": "Kak found his way to the store by using the ___ on his phone.",
-  "a": "map",
-  "o": [
-   "top",
-   "map",
-   "pool",
-   "beak"
-  ],
-  "t": "map ＝ 地圖。用手機上的地圖找路。",
-  "lv": 4
- },
- {
-  "n": 19,
-  "c": "單字",
-  "q": "Please ___ the paper on the desk and throw it in the trash can.",
-  "a": "pick up",
-  "o": [
-   "give up",
-   "be proud of",
-   "walk along",
-   "pick up"
-  ],
-  "t": "pick up ＝ 撿起來。撿起桌上的紙再丟進垃圾桶。give up 是放棄。",
-  "lv": 4
- },
- {
-  "n": 21,
-  "c": "介系詞／連接詞",
-  "q": "I enjoy taking a cool shower ___ it is very hot.",
-  "a": "when",
-  "o": [
-   "and",
-   "but",
-   "before",
-   "when"
-  ],
-  "t": "when ＝ 當…的時候。天氣很熱的時候，我喜歡沖涼。",
-  "lv": 4
- },
- {
-  "n": 24,
-  "c": "介系詞／連接詞",
-  "q": "I help Mom make cookies ___ I wash my hands.",
-  "a": "after",
-  "o": [
-   "because",
-   "before",
-   "after",
-   "when"
-  ],
-  "t": "after ＝ 在…之後。洗完手之後才幫忙做餅乾，順序才合理。",
-  "lv": 4
- },
- {
-  "n": 25,
-  "c": "文法",
-  "q": "It was a quarter ___ ten. They ___ about the dance festival in the classroom.",
-  "a": "past; were talking",
-  "o": [
-   "to; are talking",
-   "past; were talking",
-   "不填; talked",
-   "不填; talk"
-  ],
-  "t": "a quarter past ten ＝ 10:15（過了 15 分）。句子用 was，所以後面是過去進行式 were + Ving。",
-  "lv": 4
- },
- {
-  "n": 29,
-  "c": "文法",
-  "q": "Sam: I enjoy ___ video games. I always play four hours a day.\nBill: That's a lot of time.",
-  "a": "playing",
-  "o": [
-   "play",
-   "playing",
-   "plays",
-   "to play"
-  ],
-  "t": "enjoy 後面接 Ving。enjoy playing。",
-  "lv": 4
- },
- {
-  "n": 31,
-  "c": "文法",
-  "q": "Leon enjoys ___. He ___ a lot in his free time.",
-  "a": "reading; reads",
-  "o": [
-   "read; reading",
-   "reading; read",
-   "to read; reads",
-   "reading; reads"
-  ],
-  "t": "enjoy 後面接 Ving：reading。第二格是現在簡單式，He 是第三人稱單數，動詞加 s：reads。",
-  "lv": 4
- },
- {
-  "n": 32,
-  "c": "文法",
-  "q": "Peter was thirsty when he was playing games, so he stopped ___ some water.",
-  "a": "to drink",
-  "o": [
-   "and drink",
-   "drinking",
-   "to drink",
-   "drank"
-  ],
-  "t": "stop to V ＝ 停下來去做另一件事（停下來喝水）。stop Ving 是停止做某事，意思不一樣。",
-  "lv": 4
- },
- {
-  "n": 33,
-  "c": "文法",
-  "q": "After Sandy exercises every day, she always ___ a lot of water.",
-  "a": "drinks",
-  "o": [
-   "drinks",
-   "is drinking",
-   "drink",
-   "drank"
-  ],
-  "t": "every day、always 表示習慣，用現在簡單式。she 是第三人稱單數，動詞加 s：drinks。",
-  "lv": 4
- }
+{"lv": 1, "wid": "chicken", "c": "單字", "q": "哪一個字是「雞」？", "a": "chicken", "o": ["chicken", "kitchen", "chin", "check"], "t": "chicken ＝ 雞。kitchen 是廚房。"},
+{"lv": 1, "wid": "chicken", "c": "單字", "q": "A ___ lays eggs on the farm.", "a": "chicken", "o": ["chicken", "kitchen", "chin", "check"], "t": "chicken ＝ 雞。kitchen 是廚房。"},
+{"lv": 1, "wid": "chicken", "c": "拼寫", "k": "spell", "q": "A ___ lays eggs on the farm.", "h": "雞", "a": "chicken", "p": 1, "t": "chicken ＝ 雞。kitchen 是廚房。"},
+{"lv": 1, "wid": "chicken2", "c": "單字", "q": "哪一個字是「雞肉」？", "a": "chicken", "o": ["chicken", "kitchen", "chin", "check"], "t": "chicken ＝ 雞肉。同一個字 chicken，可以指雞，也可以指雞肉。"},
+{"lv": 1, "wid": "chicken2", "c": "單字", "q": "I had fried ___ for dinner.", "a": "chicken", "o": ["chicken", "kitchen", "chin", "check"], "t": "chicken ＝ 雞肉。同一個字 chicken，可以指雞，也可以指雞肉。"},
+{"lv": 1, "wid": "chicken2", "c": "拼寫", "k": "spell", "q": "I had fried ___ for dinner.", "h": "雞肉", "a": "chicken", "p": 1, "t": "chicken ＝ 雞肉。同一個字 chicken，可以指雞，也可以指雞肉。"},
+{"lv": 1, "wid": "ant", "c": "單字", "q": "哪一個字是「螞蟻」？", "a": "ant", "o": ["ant", "and", "any", "art"], "t": "ant ＝ 螞蟻。and 是「和」，any 是「任何的」。"},
+{"lv": 1, "wid": "ant", "c": "單字", "q": "A small ___ is carrying food.", "a": "ant", "o": ["ant", "and", "any", "art"], "t": "ant ＝ 螞蟻。and 是「和」，any 是「任何的」。"},
+{"lv": 1, "wid": "ant", "c": "拼寫", "k": "spell", "q": "A small ___ is carrying food.", "h": "螞蟻", "a": "ant", "p": 1, "t": "ant ＝ 螞蟻。and 是「和」，any 是「任何的」。"},
+{"lv": 1, "wid": "duck", "c": "單字", "q": "哪一個字是「鴨」？", "a": "duck", "o": ["duck", "dock", "deck", "dark"], "t": "duck ＝ 鴨。"},
+{"lv": 1, "wid": "duck", "c": "單字", "q": "The ___ is swimming in the pool and says quack, quack.", "a": "duck", "o": ["duck", "dock", "deck", "dark"], "t": "duck ＝ 鴨。"},
+{"lv": 1, "wid": "duck", "c": "拼寫", "k": "spell", "q": "The ___ is swimming in the pool and says quack, quack.", "h": "鴨", "a": "duck", "p": 1, "t": "duck ＝ 鴨。"},
+{"lv": 1, "wid": "goose", "c": "單字", "q": "哪一個字是「鵝」？", "a": "goose", "o": ["goose", "good", "goat", "loose"], "t": "goose ＝ 鵝。goose 的複數是 geese。"},
+{"lv": 1, "wid": "goose", "c": "單字", "q": "A ___ is a big white bird.", "a": "goose", "o": ["goose", "good", "goat", "loose"], "t": "goose ＝ 鵝。goose 的複數是 geese。"},
+{"lv": 1, "wid": "goose", "c": "拼寫", "k": "spell", "q": "A ___ is a big white bird.", "h": "鵝", "a": "goose", "p": 1, "t": "goose ＝ 鵝。goose 的複數是 geese。"},
+{"lv": 1, "wid": "frog", "c": "單字", "q": "哪一個字是「青蛙」？", "a": "frog", "o": ["frog", "fog", "from", "frost"], "t": "frog ＝ 青蛙。fog 是霧，from 是「從」。"},
+{"lv": 1, "wid": "frog", "c": "單字", "q": "The ___ jumped into the pool.", "a": "frog", "o": ["frog", "fog", "from", "frost"], "t": "frog ＝ 青蛙。fog 是霧，from 是「從」。"},
+{"lv": 1, "wid": "frog", "c": "拼寫", "k": "spell", "q": "The ___ jumped into the pool.", "h": "青蛙", "a": "frog", "p": 1, "t": "frog ＝ 青蛙。fog 是霧，from 是「從」。"},
+{"lv": 1, "wid": "cow", "c": "單字", "q": "哪一個字是「母牛」？", "a": "cow", "o": ["cow", "crow", "how", "now"], "t": "cow ＝ 母牛。cow 是牛，crow 是烏鴉，只差一個 r。"},
+{"lv": 1, "wid": "cow", "c": "單字", "q": "A ___ gives us milk.", "a": "cow", "o": ["cow", "crow", "how", "now"], "t": "cow ＝ 母牛。cow 是牛，crow 是烏鴉，只差一個 r。"},
+{"lv": 1, "wid": "cow", "c": "拼寫", "k": "spell", "q": "A ___ gives us milk.", "h": "母牛", "a": "cow", "p": 1, "t": "cow ＝ 母牛。cow 是牛，crow 是烏鴉，只差一個 r。"},
+{"lv": 1, "wid": "map", "c": "單字", "q": "哪一個字是「地圖」？", "a": "map", "o": ["map", "mop", "mat", "men"], "t": "map ＝ 地圖。"},
+{"lv": 1, "wid": "map", "c": "單字", "q": "I use a ___ to find the way.", "a": "map", "o": ["map", "mop", "mat", "men"], "t": "map ＝ 地圖。"},
+{"lv": 1, "wid": "map", "c": "拼寫", "k": "spell", "q": "I use a ___ to find the way.", "h": "地圖", "a": "map", "p": 1, "t": "map ＝ 地圖。"},
+{"lv": 1, "wid": "beginning", "c": "單字", "q": "哪一個字是「開頭」？", "a": "beginning", "o": ["beginning", "begin", "beginner", "begins"], "t": "beginning ＝ 開頭。中間的 n 要寫兩個。"},
+{"lv": 1, "wid": "beginning", "c": "單字", "q": "I like the ___ of the story.", "a": "beginning", "o": ["beginning", "begin", "beginner", "begins"], "t": "beginning ＝ 開頭。中間的 n 要寫兩個。"},
+{"lv": 1, "wid": "beginning", "c": "拼寫", "k": "spell", "q": "I like the ___ of the story.", "h": "開頭", "a": "beginning", "p": 1, "t": "beginning ＝ 開頭。中間的 n 要寫兩個。"},
+{"lv": 1, "wid": "middle", "c": "單字", "q": "哪一個字是「中間」？", "a": "middle", "o": ["middle", "muddle", "little", "riddle"], "t": "middle ＝ 中間。"},
+{"lv": 1, "wid": "middle", "c": "單字", "q": "The cat is in the ___ of the room.", "a": "middle", "o": ["middle", "muddle", "little", "riddle"], "t": "middle ＝ 中間。"},
+{"lv": 1, "wid": "middle", "c": "拼寫", "k": "spell", "q": "The cat is in the ___ of the room.", "h": "中間", "a": "middle", "p": 1, "t": "middle ＝ 中間。"},
+{"lv": 1, "wid": "quarter", "c": "單字", "q": "哪一個字是「四分之一；十五分鐘」？", "a": "quarter", "o": ["quarter", "quarrel", "quality", "square"], "t": "quarter ＝ 四分之一；十五分鐘。一小時的四分之一就是 15 分鐘。"},
+{"lv": 1, "wid": "quarter", "c": "單字", "q": "A ___ of an hour is fifteen minutes.", "a": "quarter", "o": ["quarter", "quarrel", "quality", "square"], "t": "quarter ＝ 四分之一；十五分鐘。一小時的四分之一就是 15 分鐘。"},
+{"lv": 1, "wid": "quarter", "c": "拼寫", "k": "spell", "q": "A ___ of an hour is fifteen minutes.", "h": "四分之一；十五分鐘", "a": "quarter", "p": 1, "t": "quarter ＝ 四分之一；十五分鐘。一小時的四分之一就是 15 分鐘。"},
+{"lv": 1, "wid": "forest", "c": "單字", "q": "哪一個字是「森林」？", "a": "forest", "o": ["forest", "floor", "front", "fruit"], "t": "forest ＝ 森林。"},
+{"lv": 1, "wid": "forest", "c": "單字", "q": "Many tall trees grow in the ___.", "a": "forest", "o": ["forest", "floor", "front", "fruit"], "t": "forest ＝ 森林。"},
+{"lv": 1, "wid": "forest", "c": "拼寫", "k": "spell", "q": "Many tall trees grow in the ___.", "h": "森林", "a": "forest", "p": 1, "t": "forest ＝ 森林。"},
+{"lv": 1, "wid": "jar", "c": "單字", "q": "哪一個字是「罐子」？", "a": "jar", "o": ["jar", "job", "joy", "jaw"], "t": "jar ＝ 罐子。"},
+{"lv": 1, "wid": "jar", "c": "單字", "q": "There is some candy in the ___.", "a": "jar", "o": ["jar", "job", "joy", "jaw"], "t": "jar ＝ 罐子。"},
+{"lv": 1, "wid": "jar", "c": "拼寫", "k": "spell", "q": "There is some candy in the ___.", "h": "罐子", "a": "jar", "p": 1, "t": "jar ＝ 罐子。"},
+{"lv": 1, "wid": "beak", "c": "單字", "q": "哪一個字是「鳥嘴」？", "a": "beak", "o": ["beak", "back", "bake", "bean"], "t": "beak ＝ 鳥嘴。back 是「回原處」。"},
+{"lv": 1, "wid": "beak", "c": "單字", "q": "A bird uses its ___ to eat.", "a": "beak", "o": ["beak", "back", "bake", "bean"], "t": "beak ＝ 鳥嘴。back 是「回原處」。"},
+{"lv": 1, "wid": "beak", "c": "拼寫", "k": "spell", "q": "A bird uses its ___ to eat.", "h": "鳥嘴", "a": "beak", "p": 1, "t": "beak ＝ 鳥嘴。back 是「回原處」。"},
+{"lv": 1, "wid": "rock_n", "c": "單字", "q": "哪一個字是「岩石」？", "a": "rock", "o": ["rock", "rack", "rob", "sock"], "t": "rock ＝ 岩石。rock 也可以當動詞，意思是搖動。"},
+{"lv": 1, "wid": "rock_n", "c": "單字", "q": "The big ___ is on the top of the mountain.", "a": "rock", "o": ["rock", "rack", "rob", "sock"], "t": "rock ＝ 岩石。rock 也可以當動詞，意思是搖動。"},
+{"lv": 1, "wid": "rock_n", "c": "拼寫", "k": "spell", "q": "The big ___ is on the top of the mountain.", "h": "岩石", "a": "rock", "p": 1, "t": "rock ＝ 岩石。rock 也可以當動詞，意思是搖動。"},
+{"lv": 1, "wid": "top", "c": "單字", "q": "哪一個字是「頂端」？", "a": "top", "o": ["top", "tap", "stop", "toy"], "t": "top ＝ 頂端。"},
+{"lv": 1, "wid": "top", "c": "單字", "q": "We climbed to the ___ of the mountain.", "a": "top", "o": ["top", "tap", "stop", "toy"], "t": "top ＝ 頂端。"},
+{"lv": 1, "wid": "top", "c": "拼寫", "k": "spell", "q": "We climbed to the ___ of the mountain.", "h": "頂端", "a": "top", "p": 1, "t": "top ＝ 頂端。"},
+{"lv": 1, "wid": "past_n", "c": "單字", "q": "哪一個字是「過去」？", "a": "past", "o": ["past", "pest", "paste", "post"], "t": "past ＝ 過去。past 還可以當介系詞，意思是經過。"},
+{"lv": 1, "wid": "past_n", "c": "單字", "q": "In the ___, there were no phones.", "a": "past", "o": ["past", "pest", "paste", "post"], "t": "past ＝ 過去。past 還可以當介系詞，意思是經過。"},
+{"lv": 1, "wid": "past_n", "c": "拼寫", "k": "spell", "q": "In the ___, there were no phones.", "h": "過去", "a": "past", "p": 1, "t": "past ＝ 過去。past 還可以當介系詞，意思是經過。"},
+{"lv": 1, "wid": "joy", "c": "單字", "q": "哪一個字是「喜悅」？", "a": "joy", "o": ["joy", "jog", "job", "joke"], "t": "joy ＝ 喜悅。"},
+{"lv": 1, "wid": "joy", "c": "單字", "q": "The children jumped with ___ when they saw the gift.", "a": "joy", "o": ["joy", "jog", "job", "joke"], "t": "joy ＝ 喜悅。"},
+{"lv": 1, "wid": "joy", "c": "拼寫", "k": "spell", "q": "The children jumped with ___ when they saw the gift.", "h": "喜悅", "a": "joy", "p": 1, "t": "joy ＝ 喜悅。"},
+{"lv": 1, "wid": "pool", "c": "單字", "q": "哪一個字是「水池；游泳池」？", "a": "pool", "o": ["pool", "poor", "pole", "pull"], "t": "pool ＝ 水池；游泳池。pool 有兩個 o。"},
+{"lv": 1, "wid": "pool", "c": "單字", "q": "Let's swim in the ___.", "a": "pool", "o": ["pool", "poor", "pole", "pull"], "t": "pool ＝ 水池；游泳池。pool 有兩個 o。"},
+{"lv": 1, "wid": "pool", "c": "拼寫", "k": "spell", "q": "Let's swim in the ___.", "h": "水池；游泳池", "a": "pool", "p": 1, "t": "pool ＝ 水池；游泳池。pool 有兩個 o。"},
+{"lv": 1, "wid": "crow", "c": "單字", "q": "哪一個字是「烏鴉」？", "a": "crow", "o": ["crow", "cow", "row", "grow"], "t": "crow ＝ 烏鴉。cow 是牛，crow 是烏鴉。"},
+{"lv": 1, "wid": "crow", "c": "單字", "q": "The black ___ flew to the tree.", "a": "crow", "o": ["crow", "cow", "row", "grow"], "t": "crow ＝ 烏鴉。cow 是牛，crow 是烏鴉。"},
+{"lv": 1, "wid": "crow", "c": "拼寫", "k": "spell", "q": "The black ___ flew to the tree.", "h": "烏鴉", "a": "crow", "p": 1, "t": "crow ＝ 烏鴉。cow 是牛，crow 是烏鴉。"},
+{"lv": 1, "wid": "half", "c": "單字", "q": "哪一個字是「一半」？", "a": "half", "o": ["half", "help", "hall", "have"], "t": "half ＝ 一半。half 的複數是 halves。"},
+{"lv": 1, "wid": "half", "c": "單字", "q": "I ate ___ of the cake.", "a": "half", "o": ["half", "help", "hall", "have"], "t": "half ＝ 一半。half 的複數是 halves。"},
+{"lv": 1, "wid": "half", "c": "拼寫", "k": "spell", "q": "I ate ___ of the cake.", "h": "一半", "a": "half", "p": 1, "t": "half ＝ 一半。half 的複數是 halves。"},
+{"lv": 1, "wid": "hour", "c": "單字", "q": "哪一個字是「小時」？", "a": "hour", "o": ["hour", "our", "house", "hot"], "t": "hour ＝ 小時。h 不發音，但還是要寫。"},
+{"lv": 1, "wid": "hour", "c": "單字", "q": "One ___ has sixty minutes.", "a": "hour", "o": ["hour", "our", "house", "hot"], "t": "hour ＝ 小時。h 不發音，但還是要寫。"},
+{"lv": 1, "wid": "hour", "c": "拼寫", "k": "spell", "q": "One ___ has sixty minutes.", "h": "小時", "a": "hour", "p": 1, "t": "hour ＝ 小時。h 不發音，但還是要寫。"},
+{"lv": 1, "wid": "job", "c": "單字", "q": "哪一個字是「工作」？", "a": "job", "o": ["job", "jar", "joy", "jaw"], "t": "job ＝ 工作。"},
+{"lv": 1, "wid": "job", "c": "單字", "q": "My mother has a new ___ in a hospital.", "a": "job", "o": ["job", "jar", "joy", "jaw"], "t": "job ＝ 工作。"},
+{"lv": 1, "wid": "job", "c": "拼寫", "k": "spell", "q": "My mother has a new ___ in a hospital.", "h": "工作", "a": "job", "p": 1, "t": "job ＝ 工作。"},
+{"lv": 1, "wid": "ugly", "c": "單字", "q": "哪一個字是「醜陋的」？", "a": "ugly", "o": ["ugly", "early", "only", "usual"], "t": "ugly ＝ 醜陋的。"},
+{"lv": 1, "wid": "ugly", "c": "單字", "q": "Nobody likes the ___ monster. It looks terrible.", "a": "ugly", "o": ["ugly", "early", "only", "usual"], "t": "ugly ＝ 醜陋的。"},
+{"lv": 1, "wid": "ugly", "c": "拼寫", "k": "spell", "q": "Nobody likes the ___ monster. It looks terrible.", "h": "醜陋的", "a": "ugly", "p": 1, "t": "ugly ＝ 醜陋的。"},
+{"lv": 1, "wid": "clear", "c": "單字", "q": "哪一個字是「晴朗的；清楚的」？", "a": "clear", "o": ["clear", "close", "clap", "cloud"], "t": "clear ＝ 晴朗的；清楚的。close 是「接近地」。"},
+{"lv": 1, "wid": "clear", "c": "單字", "q": "The sky is ___ today. I can see the sun.", "a": "clear", "o": ["clear", "close", "clap", "cloud"], "t": "clear ＝ 晴朗的；清楚的。close 是「接近地」。"},
+{"lv": 1, "wid": "clear", "c": "拼寫", "k": "spell", "q": "The sky is ___ today. I can see the sun.", "h": "晴朗的；清楚的", "a": "clear", "p": 1, "t": "clear ＝ 晴朗的；清楚的。close 是「接近地」。"},
+{"lv": 1, "wid": "dry_adj", "c": "單字", "q": "哪一個字是「乾燥的」？", "a": "dry", "o": ["dry", "try", "cry", "dear"], "t": "dry ＝ 乾燥的。"},
+{"lv": 1, "wid": "dry_adj", "c": "單字", "q": "It didn't rain, so the ground is very ___.", "a": "dry", "o": ["dry", "try", "cry", "dear"], "t": "dry ＝ 乾燥的。"},
+{"lv": 1, "wid": "dry_adj", "c": "拼寫", "k": "spell", "q": "It didn't rain, so the ground is very ___.", "h": "乾燥的", "a": "dry", "p": 1, "t": "dry ＝ 乾燥的。"},
+{"lv": 1, "wid": "thirsty", "c": "單字", "q": "哪一個字是「口渴的」？", "a": "thirsty", "o": ["thirsty", "thirty", "third", "thirteen"], "t": "thirsty ＝ 口渴的。thirty 是 30，third 是第三，thirteen 是 13。"},
+{"lv": 1, "wid": "thirsty", "c": "單字", "q": "I want some water. I am ___.", "a": "thirsty", "o": ["thirsty", "thirty", "third", "thirteen"], "t": "thirsty ＝ 口渴的。thirty 是 30，third 是第三，thirteen 是 13。"},
+{"lv": 1, "wid": "thirsty", "c": "拼寫", "k": "spell", "q": "I want some water. I am ___.", "h": "口渴的", "a": "thirsty", "p": 1, "t": "thirsty ＝ 口渴的。thirty 是 30，third 是第三，thirteen 是 13。"},
+{"lv": 1, "wid": "into", "c": "介系詞／連接詞", "q": "哪一個字是「到…裡面；進入」？", "a": "into", "o": ["into", "along", "past", "through"], "t": "into ＝ 到…裡面；進入。"},
+{"lv": 1, "wid": "into", "c": "介系詞／連接詞", "q": "She put the book ___ her bag.", "a": "into", "o": ["into", "along", "past", "through"], "t": "into ＝ 到…裡面；進入。"},
+{"lv": 1, "wid": "into", "c": "拼寫", "k": "spell", "q": "She put the book ___ her bag.", "h": "到…裡面；進入", "a": "into", "p": 1, "t": "into ＝ 到…裡面；進入。"},
+{"lv": 1, "wid": "past_p", "c": "介系詞／連接詞", "q": "哪一個字是「經過（介系詞）」？", "a": "past", "o": ["past", "path", "paste", "pest"], "t": "past ＝ 經過（介系詞）。動詞 pass 的過去式是 passed，不是 past。"},
+{"lv": 1, "wid": "past_p", "c": "介系詞／連接詞", "q": "The bus went ___ my school without stopping.", "a": "past", "o": ["past", "pass", "since", "until"], "t": "past ＝ 經過（介系詞）。動詞 pass 的過去式是 passed，不是 past。"},
+{"lv": 1, "wid": "past_p", "c": "拼寫", "k": "spell", "q": "The bus went ___ my school without stopping.", "h": "經過（介系詞）", "a": "past", "p": 1, "t": "past ＝ 經過（介系詞）。動詞 pass 的過去式是 passed，不是 past。"},
+{"lv": 1, "wid": "along", "c": "介系詞／連接詞", "q": "哪一個字是「沿著」？", "a": "along", "o": ["along", "alone", "among", "until"], "t": "along ＝ 沿著。"},
+{"lv": 1, "wid": "along", "c": "介系詞／連接詞", "q": "We walked ___ the river.", "a": "along", "o": ["along", "alone", "among", "until"], "t": "along ＝ 沿著。"},
+{"lv": 1, "wid": "along", "c": "拼寫", "k": "spell", "q": "We walked ___ the river.", "h": "沿著", "a": "along", "p": 1, "t": "along ＝ 沿著。"},
+{"lv": 1, "wid": "through", "c": "介系詞／連接詞", "q": "哪一個字是「穿越」？", "a": "through", "o": ["through", "though", "thought", "throw"], "t": "through ＝ 穿越。字尾是 -ough，要記熟。"},
+{"lv": 1, "wid": "through", "c": "介系詞／連接詞", "q": "We walked ___ the dark forest.", "a": "through", "o": ["through", "though", "thought", "throw"], "t": "through ＝ 穿越。字尾是 -ough，要記熟。"},
+{"lv": 1, "wid": "through", "c": "拼寫", "k": "spell", "q": "We walked ___ the dark forest.", "h": "穿越", "a": "through", "p": 1, "t": "through ＝ 穿越。字尾是 -ough，要記熟。"},
+{"lv": 1, "wid": "something", "c": "單字", "q": "哪一個字是「某物；某事」？", "a": "something", "o": ["something", "sometime", "someone", "sometimes"], "t": "something ＝ 某物；某事。some + thing，兩個字合在一起。"},
+{"lv": 1, "wid": "something", "c": "單字", "q": "I'm hungry. I want to eat ___ now.", "a": "something", "o": ["something", "sometime", "someone", "sometimes"], "t": "something ＝ 某物；某事。some + thing，兩個字合在一起。"},
+{"lv": 1, "wid": "something", "c": "拼寫", "k": "spell", "q": "I'm hungry. I want to eat ___ now.", "h": "某物；某事", "a": "something", "p": 1, "t": "something ＝ 某物；某事。some + thing，兩個字合在一起。"},
+{"lv": 1, "wid": "anything", "c": "單字", "q": "哪一個字是「任何事物」？", "a": "anything", "o": ["anything", "anyway", "anywhere", "many"], "t": "anything ＝ 任何事物。any + thing，兩個字合在一起。"},
+{"lv": 1, "wid": "anything", "c": "單字", "q": "Is there ___ in the jar? No, it's empty.", "a": "anything", "o": ["anything", "anyway", "anywhere", "many"], "t": "anything ＝ 任何事物。any + thing，兩個字合在一起。"},
+{"lv": 1, "wid": "anything", "c": "拼寫", "k": "spell", "q": "Is there ___ in the jar? No, it's empty.", "h": "任何事物", "a": "anything", "p": 1, "t": "anything ＝ 任何事物。any + thing，兩個字合在一起。"},
+{"lv": 1, "wid": "back", "c": "單字", "q": "哪一個字是「回原處」？", "a": "back", "o": ["back", "bake", "beak", "black"], "t": "back ＝ 回原處。beak 是鳥嘴。"},
+{"lv": 1, "wid": "back", "c": "單字", "q": "Please put the book ___ on the shelf.", "a": "back", "o": ["back", "bake", "beak", "black"], "t": "back ＝ 回原處。beak 是鳥嘴。"},
+{"lv": 1, "wid": "back", "c": "拼寫", "k": "spell", "q": "Please put the book ___ on the shelf.", "h": "回原處", "a": "back", "p": 1, "t": "back ＝ 回原處。beak 是鳥嘴。"},
+{"lv": 1, "wid": "finally", "c": "單字", "q": "哪一個字是「最後」？", "a": "finally", "o": ["finally", "final", "finish", "finely"], "t": "finally ＝ 最後。finally 有兩個 l。"},
+{"lv": 1, "wid": "finally", "c": "單字", "q": "He ran for an hour and ___ got home.", "a": "finally", "o": ["finally", "final", "finish", "finely"], "t": "finally ＝ 最後。finally 有兩個 l。"},
+{"lv": 1, "wid": "finally", "c": "拼寫", "k": "spell", "q": "He ran for an hour and ___ got home.", "h": "最後", "a": "finally", "p": 1, "t": "finally ＝ 最後。finally 有兩個 l。"},
+{"lv": 1, "wid": "close", "c": "單字", "q": "哪一個字是「接近地」？", "a": "close", "o": ["close", "clear", "cloud", "clothes"], "t": "close ＝ 接近地。clear 是晴朗的。"},
+{"lv": 1, "wid": "close", "c": "單字", "q": "Don't stand too ___ to the fire.", "a": "close", "o": ["close", "clear", "cloud", "clothes"], "t": "close ＝ 接近地。clear 是晴朗的。"},
+{"lv": 1, "wid": "close", "c": "拼寫", "k": "spell", "q": "Don't stand too ___ to the fire.", "h": "接近地", "a": "close", "p": 1, "t": "close ＝ 接近地。clear 是晴朗的。"},
+{"lv": 1, "wid": "then1", "c": "單字", "q": "哪一個字是「當時」？", "a": "then", "o": ["then", "than", "thin", "the"], "t": "then ＝ 當時。"},
+{"lv": 1, "wid": "then1", "c": "單字", "q": "I lived in Taipei in 2020. I was ten ___.", "a": "then", "o": ["then", "than", "thin", "the"], "t": "then ＝ 當時。"},
+{"lv": 1, "wid": "then1", "c": "拼寫", "k": "spell", "q": "I lived in Taipei in 2020. I was ten ___.", "h": "當時", "a": "then", "p": 1, "t": "then ＝ 當時。"},
+{"lv": 1, "wid": "either", "c": "單字", "q": "哪一個字是「也（不）」？", "a": "either", "o": ["either", "neither", "other", "ether"], "t": "either ＝ 也（不）。否定句的「也不」用 either，肯定句才用 too。"},
+{"lv": 1, "wid": "either", "c": "單字", "q": "I don't like ants, and she doesn't like ants, ___.", "a": "either", "o": ["either", "neither", "other", "ether"], "t": "either ＝ 也（不）。否定句的「也不」用 either，肯定句才用 too。"},
+{"lv": 1, "wid": "either", "c": "拼寫", "k": "spell", "q": "I don't like ants, and she doesn't like ants, ___.", "h": "也（不）", "a": "either", "p": 1, "t": "either ＝ 也（不）。否定句的「也不」用 either，肯定句才用 too。"},
+{"lv": 1, "wid": "together", "c": "單字", "q": "哪一個字是「一起」？", "a": "together", "o": ["together", "toward", "tonight", "today"], "t": "together ＝ 一起。"},
+{"lv": 1, "wid": "together", "c": "單字", "q": "We are good friends. We always play ___.", "a": "together", "o": ["together", "toward", "tonight", "today"], "t": "together ＝ 一起。"},
+{"lv": 1, "wid": "together", "c": "拼寫", "k": "spell", "q": "We are good friends. We always play ___.", "h": "一起", "a": "together", "p": 1, "t": "together ＝ 一起。"},
+{"lv": 1, "wid": "then2", "c": "單字", "q": "哪一個字是「然後」？", "a": "then", "o": ["then", "than", "thin", "the"], "t": "then ＝ 然後。"},
+{"lv": 1, "wid": "then2", "c": "單字", "q": "First wash your hands. ___ eat your lunch.", "a": "Then", "o": ["Then", "Than", "Thin", "The"], "t": "then ＝ 然後。"},
+{"lv": 1, "wid": "then2", "c": "拼寫", "k": "spell", "q": "First wash your hands. ___ eat your lunch.", "h": "然後", "a": "then", "p": 1, "t": "then ＝ 然後。"},
+{"lv": 1, "wid": "when", "c": "介系詞／連接詞", "q": "哪一個字是「當…的時候」？", "a": "when", "o": ["when", "what", "why", "who"], "t": "when ＝ 當…的時候。"},
+{"lv": 1, "wid": "when", "c": "介系詞／連接詞", "q": "I wear a coat ___ it is cold.", "a": "when", "o": ["when", "what", "why", "who"], "t": "when ＝ 當…的時候。"},
+{"lv": 1, "wid": "when", "c": "拼寫", "k": "spell", "q": "I wear a coat ___ it is cold.", "h": "當…的時候", "a": "when", "p": 1, "t": "when ＝ 當…的時候。"},
+{"lv": 1, "wid": "before", "c": "介系詞／連接詞", "q": "哪一個字是「在…之前」？", "a": "before", "o": ["before", "after", "either", "then"], "t": "before ＝ 在…之前。after 是「在…之後」。"},
+{"lv": 1, "wid": "before", "c": "介系詞／連接詞", "q": "Look both ways ___ you cross the street.", "a": "before", "o": ["before", "after", "either", "then"], "t": "before ＝ 在…之前。after 是「在…之後」。"},
+{"lv": 1, "wid": "before", "c": "拼寫", "k": "spell", "q": "Look both ways ___ you cross the street.", "h": "在…之前", "a": "before", "p": 1, "t": "before ＝ 在…之前。after 是「在…之後」。"},
+{"lv": 1, "wid": "after", "c": "介系詞／連接詞", "q": "哪一個字是「在…之後」？", "a": "after", "o": ["after", "before", "either", "then"], "t": "after ＝ 在…之後。before 是「在…之前」。"},
+{"lv": 1, "wid": "after", "c": "介系詞／連接詞", "q": "I got wet ___ I fell into the pool.", "a": "after", "o": ["after", "before", "either", "then"], "t": "after ＝ 在…之後。before 是「在…之前」。"},
+{"lv": 1, "wid": "after", "c": "拼寫", "k": "spell", "q": "I got wet ___ I fell into the pool.", "h": "在…之後", "a": "after", "p": 1, "t": "after ＝ 在…之後。before 是「在…之前」。"},
+{"lv": 1, "wid": "backforth", "c": "片語", "q": "哪一個是「來回地」？", "a": "back and forth", "o": ["back and forth", "back and fourth", "black and forth", "bake and forth"], "t": "back and forth ＝ 來回地。"},
+{"lv": 1, "wid": "backforth", "c": "片語", "q": "The ducks swam ___ in the pool.", "a": "back and forth", "o": ["back and forth", "back and fourth", "black and forth", "bake and forth"], "t": "back and forth ＝ 來回地。"},
+{"lv": 1, "wid": "backforth", "c": "拼寫", "k": "spell", "q": "The ducks swam ___ in the pool.", "h": "來回地", "a": "back and forth", "p": 1, "t": "back and forth ＝ 來回地。"},
+{"lv": 1, "wid": "atthattime", "c": "片語", "q": "哪一個是「當時」？", "a": "at that time", "o": ["at that time", "at that times", "on that time", "for that time"], "t": "at that time ＝ 當時。"},
+{"lv": 1, "wid": "atthattime", "c": "片語", "q": "I lived in Taipei in 2015. ___, I was ten years old.", "a": "At that time", "o": ["At that time", "At that times", "On that time", "For that time"], "t": "at that time ＝ 當時。"},
+{"lv": 1, "wid": "atthattime", "c": "拼寫", "k": "spell", "q": "I lived in Taipei in 2015. ___, I was ten years old.", "h": "當時", "a": "at that time", "p": 1, "t": "at that time ＝ 當時。"},
+{"lv": 1, "wid": "closeto", "c": "片語", "q": "哪一個是「接近於；靠近」？", "a": "close to", "o": ["close to", "closed to", "close of", "close at"], "t": "close to ＝ 接近於；靠近。"},
+{"lv": 1, "wid": "closeto", "c": "片語", "q": "My house is ___ the park. I can walk there in two minutes.", "a": "close to", "o": ["close to", "closed to", "close of", "close at"], "t": "close to ＝ 接近於；靠近。"},
+{"lv": 1, "wid": "closeto", "c": "拼寫", "k": "spell", "q": "My house is ___ the park. I can walk there in two minutes.", "h": "接近於；靠近", "a": "close to", "p": 1, "t": "close to ＝ 接近於；靠近。"},
+{"lv": 1, "wid": "pickup", "c": "片語", "q": "哪一個是「撿起」？", "a": "pick up", "o": ["pick up", "give up", "take a break", "get ready"], "t": "pick up ＝ 撿起。"},
+{"lv": 1, "wid": "pickup", "c": "片語", "q": "Please ___ the paper and throw it in the trash can.", "a": "pick up", "o": ["pick up", "give up", "take a break", "get ready"], "t": "pick up ＝ 撿起。"},
+{"lv": 1, "wid": "pickup", "c": "拼寫", "k": "spell", "q": "Please ___ the paper and throw it in the trash can.", "h": "撿起", "a": "pick up", "p": 1, "t": "pick up ＝ 撿起。"},
+{"lv": 1, "wid": "proudof", "c": "片語", "q": "哪一個是「以…為榮」？", "a": "be proud of", "o": ["be proud of", "be proud at", "be proud for", "be proud with"], "t": "be proud of ＝ 以…為榮。"},
+{"lv": 1, "wid": "proudof", "c": "片語", "q": "I'm very ___ my brother. He won the game.", "a": "proud of", "o": ["proud of", "proud at", "proud for", "proud with"], "t": "be proud of ＝ 以…為榮。"},
+{"lv": 1, "wid": "proudof", "c": "拼寫", "k": "spell", "q": "I'm very ___ my brother. He won the game.", "h": "以…為榮", "a": "proud of", "p": 1, "t": "be proud of ＝ 以…為榮。", "alt": ["be proud of"]},
+{"lv": 1, "wid": "takebreak", "c": "片語", "q": "哪一個是「休息」？", "a": "take a break", "o": ["take a break", "take a bake", "make a break", "take a beak"], "t": "take a break ＝ 休息。"},
+{"lv": 1, "wid": "takebreak", "c": "片語", "q": "We studied for two hours. Let's ___ now.", "a": "take a break", "o": ["take a break", "take a bake", "make a break", "take a beak"], "t": "take a break ＝ 休息。"},
+{"lv": 1, "wid": "takebreak", "c": "拼寫", "k": "spell", "q": "We studied for two hours. Let's ___ now.", "h": "休息", "a": "take a break", "p": 1, "t": "take a break ＝ 休息。"},
+{"lv": 1, "wid": "lookfor", "c": "片語", "q": "哪一個是「尋找」？", "a": "look for", "o": ["look for", "look at", "look like", "look up"], "t": "look for ＝ 尋找。"},
+{"lv": 1, "wid": "lookfor", "c": "片語", "q": "Please help me ___ my keys. I can't find them.", "a": "look for", "o": ["look for", "look at", "look like", "look up"], "t": "look for ＝ 尋找。"},
+{"lv": 1, "wid": "lookfor", "c": "拼寫", "k": "spell", "q": "Please help me ___ my keys. I can't find them.", "h": "尋找", "a": "look for", "p": 1, "t": "look for ＝ 尋找。"},
+{"lv": 1, "wid": "thinkof", "c": "片語", "q": "哪一個是「想出；認為」？", "a": "think of", "o": ["think of", "think at", "thank of", "think in"], "t": "think of ＝ 想出；認為。"},
+{"lv": 1, "wid": "thinkof", "c": "片語", "q": "Can you ___ a good name for our dog?", "a": "think of", "o": ["think of", "think at", "thank of", "think in"], "t": "think of ＝ 想出；認為。"},
+{"lv": 1, "wid": "thinkof", "c": "拼寫", "k": "spell", "q": "Can you ___ a good name for our dog?", "h": "想出；認為", "a": "think of", "p": 1, "t": "think of ＝ 想出；認為。"},
+{"lv": 1, "wid": "getready", "c": "片語", "q": "哪一個是「準備好」？", "a": "get ready", "o": ["get ready", "get reach", "get red", "get read"], "t": "get ready ＝ 準備好。"},
+{"lv": 1, "wid": "getready", "c": "片語", "q": "School starts soon. Let's ___.", "a": "get ready", "o": ["get ready", "get reach", "get red", "get read"], "t": "get ready ＝ 準備好。"},
+{"lv": 1, "wid": "getready", "c": "拼寫", "k": "spell", "q": "School starts soon. Let's ___.", "h": "準備好", "a": "get ready", "p": 1, "t": "get ready ＝ 準備好。"},
+{"lv": 1, "wid": "pass", "c": "單字", "q": "哪一個字是「經過；通過」？", "a": "pass", "o": ["pass", "pat", "pace", "pause"], "t": "pass ＝ 經過；通過。"},
+{"lv": 1, "wid": "pass", "c": "單字", "q": "I hope I can ___ the test.", "a": "pass", "o": ["pass", "pat", "past", "pace"], "t": "pass ＝ 經過；通過。"},
+{"lv": 1, "wid": "pass", "c": "拼寫", "k": "spell", "q": "I hope I can ___ the test.", "h": "經過；通過", "a": "pass", "p": 1, "t": "pass ＝ 經過；通過。"},
+{"lv": 1, "wid": "pass", "c": "字形變化", "q": "Yesterday, I ___ the English test.", "a": "passed", "o": ["passed", "pass", "passing", "past"], "t": "pass 直接加 ed：passed。past 是另一個字（過去、經過）。"},
+{"lv": 1, "wid": "pass", "c": "拼寫", "k": "spell", "q": "Yesterday, I ___ the English test.", "h": "pass（經過）的過去式", "a": "passed", "p": 1, "t": "pass 直接加 ed：passed。past 是另一個字（過去、經過）。"},
+{"lv": 1, "wid": "pass", "c": "字形變化", "q": "Look! The bus is ___ our school.", "a": "passing", "o": ["passing", "passeing", "passed", "pass"], "t": "is 後面接 Ving。pass 直接加 ing：passing。"},
+{"lv": 1, "wid": "pass", "c": "拼寫", "k": "spell", "q": "Look! The bus is ___ our school.", "h": "pass（經過）的 Ving", "a": "passing", "p": 1, "t": "is 後面接 Ving。pass 直接加 ing：passing。"},
+{"lv": 1, "wid": "dry_v", "c": "單字", "q": "哪一個字是「使變乾」？", "a": "dry", "o": ["dry", "try", "cry", "fry"], "t": "dry ＝ 使變乾。"},
+{"lv": 1, "wid": "dry_v", "c": "單字", "q": "Mom uses a towel to ___ her hair.", "a": "dry", "o": ["dry", "try", "cry", "fry"], "t": "dry ＝ 使變乾。"},
+{"lv": 1, "wid": "dry_v", "c": "拼寫", "k": "spell", "q": "Mom uses a towel to ___ her hair.", "h": "使變乾", "a": "dry", "p": 1, "t": "dry ＝ 使變乾。"},
+{"lv": 1, "wid": "dry_v", "c": "字形變化", "q": "Last night, Mom ___ the dishes with a towel.", "a": "dried", "o": ["dried", "dryed", "dry", "drying"], "t": "dry 結尾是「子音＋y」，把 y 改成 i 再加 ed：dried。"},
+{"lv": 1, "wid": "dry_v", "c": "拼寫", "k": "spell", "q": "Last night, Mom ___ the dishes with a towel.", "h": "dry（使變乾）的過去式", "a": "dried", "p": 1, "t": "dry 結尾是「子音＋y」，把 y 改成 i 再加 ed：dried。"},
+{"lv": 1, "wid": "dry_v", "c": "字形變化", "q": "Mom is ___ her hair now.", "a": "drying", "o": ["drying", "dring", "dried", "dryed"], "t": "is 後面接 Ving。dry 直接加 ing：drying（y 不變）。"},
+{"lv": 1, "wid": "dry_v", "c": "拼寫", "k": "spell", "q": "Mom is ___ her hair now.", "h": "dry（使變乾）的 Ving", "a": "drying", "p": 1, "t": "is 後面接 Ving。dry 直接加 ing：drying（y 不變）。"},
+{"lv": 1, "wid": "reach", "c": "單字", "q": "哪一個字是「達到；伸出手臂」？", "a": "reach", "o": ["reach", "teach", "beach", "rich"], "t": "reach ＝ 達到；伸出手臂。"},
+{"lv": 1, "wid": "reach", "c": "單字", "q": "The cat can't ___ the fish on the shelf.", "a": "reach", "o": ["reach", "teach", "beach", "rich"], "t": "reach ＝ 達到；伸出手臂。"},
+{"lv": 1, "wid": "reach", "c": "拼寫", "k": "spell", "q": "The cat can't ___ the fish on the shelf.", "h": "達到；伸出手臂", "a": "reach", "p": 1, "t": "reach ＝ 達到；伸出手臂。"},
+{"lv": 1, "wid": "reach", "c": "字形變化", "q": "Yesterday, the boy ___ the top shelf.", "a": "reached", "o": ["reached", "reach", "reaches", "reaching"], "t": "reach 直接加 ed：reached。"},
+{"lv": 1, "wid": "reach", "c": "拼寫", "k": "spell", "q": "Yesterday, the boy ___ the top shelf.", "h": "reach（達到）的過去式", "a": "reached", "p": 1, "t": "reach 直接加 ed：reached。"},
+{"lv": 1, "wid": "reach", "c": "字形變化", "q": "He is ___ for the apple on the tree.", "a": "reaching", "o": ["reaching", "reacheing", "reached", "reach"], "t": "is 後面接 Ving。reach 直接加 ing：reaching。"},
+{"lv": 1, "wid": "reach", "c": "拼寫", "k": "spell", "q": "He is ___ for the apple on the tree.", "h": "reach（達到）的 Ving", "a": "reaching", "p": 1, "t": "is 後面接 Ving。reach 直接加 ing：reaching。"},
+{"lv": 1, "wid": "rock_v", "c": "單字", "q": "哪一個字是「搖動」？", "a": "rock", "o": ["rock", "lock", "rack", "rob"], "t": "rock ＝ 搖動。"},
+{"lv": 1, "wid": "rock_v", "c": "單字", "q": "Mom will ___ the baby to sleep.", "a": "rock", "o": ["rock", "lock", "rack", "rob"], "t": "rock ＝ 搖動。"},
+{"lv": 1, "wid": "rock_v", "c": "拼寫", "k": "spell", "q": "Mom will ___ the baby to sleep.", "h": "搖動", "a": "rock", "p": 1, "t": "rock ＝ 搖動。"},
+{"lv": 1, "wid": "rock_v", "c": "字形變化", "q": "Last night, Dad ___ the baby to sleep.", "a": "rocked", "o": ["rocked", "rock", "rocking", "rocks"], "t": "rock 直接加 ed：rocked。"},
+{"lv": 1, "wid": "rock_v", "c": "拼寫", "k": "spell", "q": "Last night, Dad ___ the baby to sleep.", "h": "rock（搖動）的過去式", "a": "rocked", "p": 1, "t": "rock 直接加 ed：rocked。"},
+{"lv": 1, "wid": "rock_v", "c": "字形變化", "q": "Dad is ___ the baby now.", "a": "rocking", "o": ["rocking", "rockking", "rocked", "rock"], "t": "is 後面接 Ving。rock 直接加 ing：rocking。"},
+{"lv": 1, "wid": "rock_v", "c": "拼寫", "k": "spell", "q": "Dad is ___ the baby now.", "h": "rock（搖動）的 Ving", "a": "rocking", "p": 1, "t": "is 後面接 Ving。rock 直接加 ing：rocking。"},
+{"lv": 1, "wid": "fly", "c": "單字", "q": "哪一個字是「飛行；駕駛飛機」？", "a": "fly", "o": ["fly", "fry", "try", "flu"], "t": "fly ＝ 飛行；駕駛飛機。"},
+{"lv": 1, "wid": "fly", "c": "單字", "q": "Birds can ___ high in the sky.", "a": "fly", "o": ["fly", "fry", "try", "flu"], "t": "fly ＝ 飛行；駕駛飛機。"},
+{"lv": 1, "wid": "fly", "c": "拼寫", "k": "spell", "q": "Birds can ___ high in the sky.", "h": "飛行；駕駛飛機", "a": "fly", "p": 1, "t": "fly ＝ 飛行；駕駛飛機。"},
+{"lv": 1, "wid": "fly", "c": "字形變化", "q": "Yesterday, a bird ___ over our house.", "a": "flew", "o": ["flew", "flied", "flyed", "flying"], "t": "fly 是不規則動詞：fly → flew。"},
+{"lv": 1, "wid": "fly", "c": "拼寫", "k": "spell", "q": "Yesterday, a bird ___ over our house.", "h": "fly（飛行）的過去式", "a": "flew", "p": 1, "t": "fly 是不規則動詞：fly → flew。"},
+{"lv": 1, "wid": "fly", "c": "字形變化", "q": "Look! A bird is ___ over the forest.", "a": "flying", "o": ["flying", "fliing", "flew", "fly"], "t": "is 後面接 Ving。fly 直接加 ing：flying（y 不變）。"},
+{"lv": 1, "wid": "fly", "c": "拼寫", "k": "spell", "q": "Look! A bird is ___ over the forest.", "h": "fly（飛行）的 Ving", "a": "flying", "p": 1, "t": "is 後面接 Ving。fly 直接加 ing：flying（y 不變）。"},
+{"lv": 1, "wid": "pick", "c": "單字", "q": "哪一個字是「撿；挑選」？", "a": "pick", "o": ["pick", "pack", "pig", "pink"], "t": "pick ＝ 撿；挑選。"},
+{"lv": 1, "wid": "pick", "c": "單字", "q": "Please ___ one card from the box.", "a": "pick", "o": ["pick", "pack", "pig", "pink"], "t": "pick ＝ 撿；挑選。"},
+{"lv": 1, "wid": "pick", "c": "拼寫", "k": "spell", "q": "Please ___ one card from the box.", "h": "撿；挑選", "a": "pick", "p": 1, "t": "pick ＝ 撿；挑選。"},
+{"lv": 1, "wid": "pick", "c": "字形變化", "q": "Yesterday, the girl ___ a red flower.", "a": "picked", "o": ["picked", "pick", "picking", "picks"], "t": "pick 直接加 ed：picked。"},
+{"lv": 1, "wid": "pick", "c": "拼寫", "k": "spell", "q": "Yesterday, the girl ___ a red flower.", "h": "pick（撿）的過去式", "a": "picked", "p": 1, "t": "pick 直接加 ed：picked。"},
+{"lv": 1, "wid": "pick", "c": "字形變化", "q": "She is ___ flowers in the garden.", "a": "picking", "o": ["picking", "pickking", "picked", "pick"], "t": "is 後面接 Ving。pick 直接加 ing：picking。"},
+{"lv": 1, "wid": "pick", "c": "拼寫", "k": "spell", "q": "She is ___ flowers in the garden.", "h": "pick（撿）的 Ving", "a": "picking", "p": 1, "t": "is 後面接 Ving。pick 直接加 ing：picking。"},
+{"lv": 1, "wid": "drop", "c": "單字", "q": "哪一個字是「丟下；落下」？", "a": "drop", "o": ["drop", "drip", "drum", "prop"], "t": "drop ＝ 丟下；落下。"},
+{"lv": 1, "wid": "drop", "c": "單字", "q": "Be careful! Don't ___ the cup.", "a": "drop", "o": ["drop", "drip", "drum", "prop"], "t": "drop ＝ 丟下；落下。"},
+{"lv": 1, "wid": "drop", "c": "拼寫", "k": "spell", "q": "Be careful! Don't ___ the cup.", "h": "丟下；落下", "a": "drop", "p": 1, "t": "drop ＝ 丟下；落下。"},
+{"lv": 1, "wid": "drop", "c": "字形變化", "q": "Yesterday, he ___ his phone on the floor.", "a": "dropped", "o": ["dropped", "droped", "drop", "dropping"], "t": "drop 結尾是「短母音＋子音」，要重複 p 再加 ed：dropped。"},
+{"lv": 1, "wid": "drop", "c": "拼寫", "k": "spell", "q": "Yesterday, he ___ his phone on the floor.", "h": "drop（丟下）的過去式", "a": "dropped", "p": 1, "t": "drop 結尾是「短母音＋子音」，要重複 p 再加 ed：dropped。"},
+{"lv": 1, "wid": "drop", "c": "字形變化", "q": "Look! The boy is ___ the ball.", "a": "dropping", "o": ["dropping", "droping", "dropped", "drop"], "t": "drop 要重複 p 再加 ing：dropping。"},
+{"lv": 1, "wid": "drop", "c": "拼寫", "k": "spell", "q": "Look! The boy is ___ the ball.", "h": "drop（丟下）的 Ving", "a": "dropping", "p": 1, "t": "drop 要重複 p 再加 ing：dropping。"},
+{"lv": 1, "wid": "finish", "c": "單字", "q": "哪一個字是「完成；結束」？", "a": "finish", "o": ["finish", "fish", "first", "finally"], "t": "finish ＝ 完成；結束。"},
+{"lv": 1, "wid": "finish", "c": "單字", "q": "I will ___ my homework before dinner.", "a": "finish", "o": ["finish", "fish", "first", "finally"], "t": "finish ＝ 完成；結束。"},
+{"lv": 1, "wid": "finish", "c": "拼寫", "k": "spell", "q": "I will ___ my homework before dinner.", "h": "完成；結束", "a": "finish", "p": 1, "t": "finish ＝ 完成；結束。"},
+{"lv": 1, "wid": "finish", "c": "字形變化", "q": "Last night, I ___ my homework at nine.", "a": "finished", "o": ["finished", "finish", "finishing", "finishes"], "t": "finish 直接加 ed：finished。"},
+{"lv": 1, "wid": "finish", "c": "拼寫", "k": "spell", "q": "Last night, I ___ my homework at nine.", "h": "finish（完成）的過去式", "a": "finished", "p": 1, "t": "finish 直接加 ed：finished。"},
+{"lv": 1, "wid": "finish", "c": "字形變化", "q": "I am ___ my homework now.", "a": "finishing", "o": ["finishing", "finising", "finished", "finish"], "t": "is / am 後面接 Ving。finish 直接加 ing：finishing。"},
+{"lv": 1, "wid": "finish", "c": "拼寫", "k": "spell", "q": "I am ___ my homework now.", "h": "finish（完成）的 Ving", "a": "finishing", "p": 1, "t": "is / am 後面接 Ving。finish 直接加 ing：finishing。"},
+{"lv": 1, "wid": "shout", "c": "單字", "q": "哪一個字是「喊叫」？", "a": "shout", "o": ["shout", "short", "shut", "shot"], "t": "shout ＝ 喊叫。"},
+{"lv": 1, "wid": "shout", "c": "單字", "q": "Don't ___ in the library.", "a": "shout", "o": ["shout", "short", "shut", "shot"], "t": "shout ＝ 喊叫。"},
+{"lv": 1, "wid": "shout", "c": "拼寫", "k": "spell", "q": "Don't ___ in the library.", "h": "喊叫", "a": "shout", "p": 1, "t": "shout ＝ 喊叫。"},
+{"lv": 1, "wid": "shout", "c": "字形變化", "q": "Yesterday, the boy ___ at the dog.", "a": "shouted", "o": ["shouted", "shout", "shouting", "shouts"], "t": "shout 直接加 ed：shouted。"},
+{"lv": 1, "wid": "shout", "c": "拼寫", "k": "spell", "q": "Yesterday, the boy ___ at the dog.", "h": "shout（喊叫）的過去式", "a": "shouted", "p": 1, "t": "shout 直接加 ed：shouted。"},
+{"lv": 1, "wid": "shout", "c": "字形變化", "q": "Why are you ___ at me?", "a": "shouting", "o": ["shouting", "shoutting", "shouted", "shout"], "t": "are 後面接 Ving。shout 直接加 ing：shouting。"},
+{"lv": 1, "wid": "shout", "c": "拼寫", "k": "spell", "q": "Why are you ___ at me?", "h": "shout（喊叫）的 Ving", "a": "shouting", "p": 1, "t": "are 後面接 Ving。shout 直接加 ing：shouting。"},
+{"lv": 1, "wid": "walk", "c": "單字", "q": "哪一個字是「走」？", "a": "walk", "o": ["walk", "work", "wake", "talk"], "t": "walk ＝ 走。"},
+{"lv": 1, "wid": "walk", "c": "單字", "q": "I ___ to school every day.", "a": "walk", "o": ["walk", "work", "wake", "talk"], "t": "walk ＝ 走。"},
+{"lv": 1, "wid": "walk", "c": "拼寫", "k": "spell", "q": "I ___ to school every day.", "h": "走", "a": "walk", "p": 1, "t": "walk ＝ 走。"},
+{"lv": 1, "wid": "walk", "c": "字形變化", "q": "Last Sunday, we ___ to the park.", "a": "walked", "o": ["walked", "walk", "walking", "walks"], "t": "walk 直接加 ed：walked。"},
+{"lv": 1, "wid": "walk", "c": "拼寫", "k": "spell", "q": "Last Sunday, we ___ to the park.", "h": "walk（走）的過去式", "a": "walked", "p": 1, "t": "walk 直接加 ed：walked。"},
+{"lv": 1, "wid": "walk", "c": "字形變化", "q": "We are ___ along the river.", "a": "walking", "o": ["walking", "walkking", "walked", "walk"], "t": "are 後面接 Ving。walk 直接加 ing：walking。"},
+{"lv": 1, "wid": "walk", "c": "拼寫", "k": "spell", "q": "We are ___ along the river.", "h": "walk（走）的 Ving", "a": "walking", "p": 1, "t": "are 後面接 Ving。walk 直接加 ing：walking。"},
+{"lv": 1, "wid": "shine", "c": "單字", "q": "哪一個字是「照耀；發光」？", "a": "shine", "o": ["shine", "shin", "shone", "chin"], "t": "shine ＝ 照耀；發光。"},
+{"lv": 1, "wid": "shine", "c": "單字", "q": "The sun will ___ tomorrow.", "a": "shine", "o": ["shine", "shin", "shone", "chin"], "t": "shine ＝ 照耀；發光。"},
+{"lv": 1, "wid": "shine", "c": "拼寫", "k": "spell", "q": "The sun will ___ tomorrow.", "h": "照耀；發光", "a": "shine", "p": 1, "t": "shine ＝ 照耀；發光。"},
+{"lv": 1, "wid": "shine", "c": "字形變化", "q": "Last night, the moon ___ brightly.", "a": "shone", "o": ["shone", "shine", "shining", "shines"], "t": "shine 的過去式是 shone（也有人寫 shined）。"},
+{"lv": 1, "wid": "shine", "c": "拼寫", "k": "spell", "q": "Last night, the moon ___ brightly.", "h": "shine（照耀）的過去式", "a": "shone", "p": 1, "t": "shine 的過去式是 shone（也有人寫 shined）。", "alt": ["shined"]},
+{"lv": 1, "wid": "shine", "c": "字形變化", "q": "Look! The sun is ___ brightly.", "a": "shining", "o": ["shining", "shineing", "shinning", "shone"], "t": "shine 結尾是 e，去掉 e 再加 ing：shining。"},
+{"lv": 1, "wid": "shine", "c": "拼寫", "k": "spell", "q": "Look! The sun is ___ brightly.", "h": "shine（照耀）的 Ving", "a": "shining", "p": 1, "t": "shine 結尾是 e，去掉 e 再加 ing：shining。"},
+{"lv": 1, "wid": "find", "c": "單字", "q": "哪一個字是「找到」？", "a": "find", "o": ["find", "fine", "fund", "mind"], "t": "find ＝ 找到。"},
+{"lv": 1, "wid": "find", "c": "單字", "q": "I can't ___ my pen.", "a": "find", "o": ["find", "fine", "fund", "mind"], "t": "find ＝ 找到。"},
+{"lv": 1, "wid": "find", "c": "拼寫", "k": "spell", "q": "I can't ___ my pen.", "h": "找到", "a": "find", "p": 1, "t": "find ＝ 找到。"},
+{"lv": 1, "wid": "find", "c": "字形變化", "q": "Yesterday, I ___ my lost keys.", "a": "found", "o": ["found", "finded", "find", "finding"], "t": "find 是不規則動詞：find → found。"},
+{"lv": 1, "wid": "find", "c": "拼寫", "k": "spell", "q": "Yesterday, I ___ my lost keys.", "h": "find（找到）的過去式", "a": "found", "p": 1, "t": "find 是不規則動詞：find → found。"},
+{"lv": 1, "wid": "find", "c": "字形變化", "q": "I'm ___ my keys now.", "a": "finding", "o": ["finding", "findding", "found", "find"], "t": "is / am 後面接 Ving。find 直接加 ing：finding。"},
+{"lv": 1, "wid": "find", "c": "拼寫", "k": "spell", "q": "I'm ___ my keys now.", "h": "find（找到）的 Ving", "a": "finding", "p": 1, "t": "is / am 後面接 Ving。find 直接加 ing：finding。"},
+{"lv": 1, "wid": "wait", "c": "單字", "q": "哪一個字是「等待」？", "a": "wait", "o": ["wait", "want", "weight", "white"], "t": "wait ＝ 等待。"},
+{"lv": 1, "wid": "wait", "c": "單字", "q": "Please ___ here for a minute.", "a": "wait", "o": ["wait", "want", "weight", "white"], "t": "wait ＝ 等待。"},
+{"lv": 1, "wid": "wait", "c": "拼寫", "k": "spell", "q": "Please ___ here for a minute.", "h": "等待", "a": "wait", "p": 1, "t": "wait ＝ 等待。"},
+{"lv": 1, "wid": "wait", "c": "字形變化", "q": "Yesterday, we ___ for the bus for half an hour.", "a": "waited", "o": ["waited", "waitted", "wait", "waiting"], "t": "wait 直接加 ed：waited，不用重複 t。"},
+{"lv": 1, "wid": "wait", "c": "拼寫", "k": "spell", "q": "Yesterday, we ___ for the bus for half an hour.", "h": "wait（等待）的過去式", "a": "waited", "p": 1, "t": "wait 直接加 ed：waited，不用重複 t。"},
+{"lv": 1, "wid": "wait", "c": "字形變化", "q": "I am ___ for the bus.", "a": "waiting", "o": ["waiting", "waitting", "waited", "wait"], "t": "am 後面接 Ving。wait 直接加 ing：waiting。"},
+{"lv": 1, "wid": "wait", "c": "拼寫", "k": "spell", "q": "I am ___ for the bus.", "h": "wait（等待）的 Ving", "a": "waiting", "p": 1, "t": "am 後面接 Ving。wait 直接加 ing：waiting。"},
+{"lv": 1, "wid": "enjoy", "c": "單字", "q": "哪一個字是「享受」？", "a": "enjoy", "o": ["enjoy", "enough", "employ", "annoy"], "t": "enjoy ＝ 享受。"},
+{"lv": 1, "wid": "enjoy", "c": "單字", "q": "I ___ playing games with my friends.", "a": "enjoy", "o": ["enjoy", "enough", "employ", "annoy"], "t": "enjoy ＝ 享受。"},
+{"lv": 1, "wid": "enjoy", "c": "拼寫", "k": "spell", "q": "I ___ playing games with my friends.", "h": "享受", "a": "enjoy", "p": 1, "t": "enjoy ＝ 享受。"},
+{"lv": 1, "wid": "enjoy", "c": "字形變化", "q": "Last weekend, we ___ the movie.", "a": "enjoyed", "o": ["enjoyed", "enjoied", "enjoy", "enjoying"], "t": "enjoy 結尾是「母音＋y」，直接加 ed：enjoyed。"},
+{"lv": 1, "wid": "enjoy", "c": "拼寫", "k": "spell", "q": "Last weekend, we ___ the movie.", "h": "enjoy（享受）的過去式", "a": "enjoyed", "p": 1, "t": "enjoy 結尾是「母音＋y」，直接加 ed：enjoyed。"},
+{"lv": 1, "wid": "enjoy", "c": "字形變化", "q": "We are ___ the party now.", "a": "enjoying", "o": ["enjoying", "enjoing", "enjoyed", "enjoy"], "t": "are 後面接 Ving。enjoy 直接加 ing：enjoying。"},
+{"lv": 1, "wid": "enjoy", "c": "拼寫", "k": "spell", "q": "We are ___ the party now.", "h": "enjoy（享受）的 Ving", "a": "enjoying", "p": 1, "t": "are 後面接 Ving。enjoy 直接加 ing：enjoying。"},
+{"lv": 1, "wid": "drink", "c": "單字", "q": "哪一個字是「喝」？", "a": "drink", "o": ["drink", "dream", "drive", "think"], "t": "drink ＝ 喝。"},
+{"lv": 1, "wid": "drink", "c": "單字", "q": "I ___ a lot of water every day.", "a": "drink", "o": ["drink", "dream", "drive", "think"], "t": "drink ＝ 喝。"},
+{"lv": 1, "wid": "drink", "c": "拼寫", "k": "spell", "q": "I ___ a lot of water every day.", "h": "喝", "a": "drink", "p": 1, "t": "drink ＝ 喝。"},
+{"lv": 1, "wid": "drink", "c": "字形變化", "q": "Yesterday, the crow ___ some water.", "a": "drank", "o": ["drank", "drinked", "drink", "drinking"], "t": "drink 是不規則動詞：drink → drank。"},
+{"lv": 1, "wid": "drink", "c": "拼寫", "k": "spell", "q": "Yesterday, the crow ___ some water.", "h": "drink（喝）的過去式", "a": "drank", "p": 1, "t": "drink 是不規則動詞：drink → drank。"},
+{"lv": 1, "wid": "drink", "c": "字形變化", "q": "The crow is ___ water now.", "a": "drinking", "o": ["drinking", "drinkking", "drank", "drink"], "t": "is 後面接 Ving。drink 直接加 ing：drinking。"},
+{"lv": 1, "wid": "drink", "c": "拼寫", "k": "spell", "q": "The crow is ___ water now.", "h": "drink（喝）的 Ving", "a": "drinking", "p": 1, "t": "is 後面接 Ving。drink 直接加 ing：drinking。"},
+{"lv": 2, "c": "字形變化", "q": "One goose, two ___.", "a": "geese", "o": ["geese", "gooses", "goosees", "goose"], "t": "goose 的複數是不規則的：geese。"},
+{"lv": 2, "c": "字形變化", "q": "Cut the cake into two ___.", "a": "halves", "o": ["halves", "halfs", "halfes", "half"], "t": "half 的複數是 halves（f 變成 ves）。"},
+{"lv": 2, "c": "字形變化", "q": "Yesterday, the crow ___ some water.", "a": "drank", "o": ["drank", "drinked", "drinks", "drinking"], "t": "drink 的過去式是不規則的：drank。看到 Yesterday 就用過去式。"},
+{"lv": 2, "c": "字形變化", "q": "The bird ___ over the forest yesterday.", "a": "flew", "o": ["flew", "flied", "flyed", "flying"], "t": "fly 的過去式是不規則的：flew。"},
+{"lv": 2, "c": "字形變化", "q": "The boy ___ a rock into the pool.", "a": "dropped", "o": ["dropped", "droped", "drops", "dropping"], "t": "drop 結尾是「短母音＋子音」，過去式要重複 p 再加 ed：dropped。"},
+{"lv": 2, "c": "字形變化", "q": "Mom is ___ the clothes now.", "a": "drying", "o": ["drying", "dring", "dried", "dryed"], "t": "is 後面接 Ving。dry 直接加 ing：drying。過去式才是 dried。"},
+{"lv": 2, "c": "字形變化", "q": "I ___ my keys under the bed yesterday.", "a": "found", "o": ["found", "finded", "find", "finding"], "t": "find 的過去式是不規則的：found。"},
+{"lv": 2, "c": "字形變化", "q": "Look! The sun is ___.", "a": "shining", "o": ["shining", "shineing", "shinning", "shined"], "t": "shine 結尾是 e，去掉 e 再加 ing：shining。"},
+{"lv": 2, "c": "時間／數字", "q": "7:15 的英文怎麼說？", "a": "a quarter after seven", "o": ["a quarter after seven", "a quarter to seven", "fifteen to seven", "seven past fifteen"], "t": "quarter ＝ 15 分鐘。過了 15 分，就是 a quarter after（或 past）seven。"},
+{"lv": 2, "c": "時間／數字", "q": "10:55 的英文怎麼說？", "a": "five to eleven", "o": ["five to eleven", "five past eleven", "fifty to ten", "five to ten"], "t": "to ＝ 還差幾分到下一個小時。還差 5 分到 11 點，就是 five to eleven。"},
+{"lv": 2, "c": "時間／數字", "q": "6:30 的英文怎麼說？", "a": "half past six", "o": ["half past six", "half to six", "a quarter past six", "thirty to six"], "t": "half ＝ 一半（30 分）。6 點過了一半，就是 half past six。"},
+{"lv": 2, "c": "時間／數字", "q": "Twelve plus eight is ___.", "a": "twenty", "o": ["twenty", "eighty", "eighteen", "twelve"], "t": "12 + 8 ＝ 20 ＝ twenty。eighty 是 80，eighteen 是 18。"},
+{"lv": 2, "c": "介系詞／連接詞", "q": "We walked ___ the forest and came out on the other side.", "a": "through", "o": ["through", "into", "along", "past"], "t": "through ＝ 穿越，從這一頭走到另一頭。"},
+{"lv": 2, "c": "介系詞／連接詞", "q": "The bus went ___ my school without stopping.", "a": "past", "o": ["past", "pass", "into", "along"], "t": "past 當介系詞＝經過。pass 是動詞，要說 passed。"},
+{"lv": 2, "c": "介系詞／連接詞", "q": "I brush my teeth ___ I go to bed.", "a": "before", "o": ["before", "after", "when", "either"], "t": "先刷牙，再睡覺。before ＝ 在…之前。"},
+{"lv": 2, "c": "介系詞／連接詞", "q": "I can't swim. My brother can't swim, ___.", "a": "either", "o": ["either", "too", "then", "together"], "t": "否定句的「也不」用 either。有 can't 就想 either。"},
+{"lv": 2, "c": "片語", "q": "I'm ___ my keys. I can't find them.", "a": "looking for", "o": ["looking for", "looking at", "picking up", "thinking of"], "t": "look for ＝ 尋找。look at 是「看」。"},
+{"lv": 2, "c": "拼寫", "k": "spell", "q": "It's a ___ past nine.", "h": "四分之一；十五分鐘", "a": "quarter", "p": 1, "t": "a quarter past nine ＝ 9:15。"},
+{"lv": 2, "c": "拼寫", "k": "spell", "q": "I like the ___ of the story. It starts with a crow.", "h": "開頭", "a": "beginning", "p": 1, "t": "beginning ＝ 開頭，中間的 n 要寫兩個。"},
+{"lv": 2, "c": "拼寫", "k": "spell", "q": "Let's go to school ___.", "h": "一起", "a": "together", "p": 1, "t": "together ＝ 一起。"},
+{"lv": 2, "c": "拼寫", "k": "spell", "q": "I want some water. I am ___.", "h": "口渴的", "a": "thirsty", "p": 0, "t": "thirsty ＝ 口渴的。不要寫成 thirty。"},
+{"lv": 2, "c": "拼寫", "k": "spell", "q": "Yesterday I ___ a lot of water.", "h": "drink 的過去式", "a": "drank", "p": 0, "t": "drink → drank。"},
+{"lv": 2, "c": "拼寫", "k": "spell", "q": "Look! A bird is ___ in the sky.", "h": "fly 的 Ving", "a": "flying", "p": 0, "t": "fly → flying，y 不變。"},
+{"lv": 2, "c": "拼寫", "k": "spell", "q": "He walked for an hour and ___ got home.", "h": "最後", "a": "finally", "p": 0, "t": "finally ＝ 最後，有兩個 l。"},
+{"lv": 3, "c": "單字", "q": "The crow was so ___ that he wanted to drink some water at once.", "a": "thirsty", "o": ["thirsty", "ugly", "dry", "clear"], "t": "thirsty ＝ 口渴的。人口渴用 thirsty，dry 是東西乾乾的。"},
+{"lv": 3, "c": "單字", "q": "The crow dropped a ___ into the jar, and the water went up.", "a": "rock", "o": ["rock", "beak", "joy", "job"], "t": "rock ＝ 岩石、石頭。丟石頭進去，水位才會上升。"},
+{"lv": 3, "c": "單字", "q": "We climbed to the ___ of the mountain and saw the whole forest.", "a": "top", "o": ["top", "beginning", "middle", "quarter"], "t": "the top of the mountain ＝ 山頂。"},
+{"lv": 3, "c": "單字", "q": "Please look at the ___. It shows where the pool and the forest are.", "a": "map", "o": ["map", "jar", "beak", "job"], "t": "map ＝ 地圖，會告訴我們東西在哪裡。"},
+{"lv": 3, "c": "單字", "q": "The sky is ___ today, so we can see the sun and the mountains.", "a": "clear", "o": ["clear", "ugly", "dry", "thirsty"], "t": "clear ＝ 晴朗的。天空晴朗才看得到太陽和山。"},
+{"lv": 3, "c": "時間／數字", "q": "It's a ___ to nine. We must leave for school now.", "a": "quarter", "o": ["quarter", "half", "hour", "job"], "t": "a quarter to nine ＝ 8:45（還差 15 分到 9 點）。"},
+{"lv": 3, "c": "時間／數字", "q": "It was five ___ eleven. The class was almost over.", "a": "to", "o": ["to", "past", "after", "along"], "t": "five to eleven ＝ 10:55。還差 5 分到 11 點用 to。"},
+{"lv": 3, "c": "介系詞／連接詞", "q": "The frog jumped ___ the pool and swam to the other side.", "a": "into", "o": ["into", "along", "past", "through"], "t": "into ＝ 進入。青蛙從外面跳進水池。"},
+{"lv": 3, "c": "介系詞／連接詞", "q": "We walked ___ the river and saw a duck and a goose.", "a": "along", "o": ["along", "into", "either", "then"], "t": "along ＝ 沿著。沿著河邊走。"},
+{"lv": 3, "c": "介系詞／連接詞", "q": "The ducks swam ___ and forth in the pool.", "a": "back", "o": ["back", "then", "close", "together"], "t": "back and forth ＝ 來回地。"},
+{"lv": 3, "c": "介系詞／連接詞", "q": "I wash my hands ___ dinner, so my hands are clean when I eat.", "a": "before", "o": ["before", "after", "then", "either"], "t": "吃飯前先洗手，所以用 before。"},
+{"lv": 3, "c": "介系詞／連接詞", "q": "I can't swim, and my sister can't swim, ___.", "a": "either", "o": ["either", "too", "then", "back"], "t": "否定句的「也不」用 either，肯定句才用 too。"},
+{"lv": 3, "c": "片語", "q": "My teacher is proud ___ us because we all passed the test.", "a": "of", "o": ["of", "at", "in", "for"], "t": "be proud of ＝ 以…為榮。"},
+{"lv": 3, "c": "字形變化", "q": "The crow ___ a rock yesterday and dropped it into the jar.", "a": "picked", "o": ["picked", "picks", "picking", "pick"], "t": "Yesterday 表示過去，用過去式：picked。"},
+{"lv": 3, "c": "字形變化", "q": "Look! The crow is ___ up a rock.", "a": "picking", "o": ["picking", "picked", "picks", "to pick"], "t": "is 後面接 Ving：is picking up。"},
+{"lv": 3, "c": "字形變化", "q": "When Ann was walking in the forest, she ___ a beautiful bird.", "a": "found", "o": ["found", "finds", "finding", "find"], "t": "was walking 是過去，所以另一個動作也用過去式：find → found。"},
+{"lv": 3, "c": "文法", "q": "Tim: What was the crow ___ at that time?\nAnn: It was ___ for water.", "a": "doing; looking", "o": ["doing; looking", "do; look", "did; looked", "doing; looks"], "t": "問句用 was，所以是過去進行式 was + Ving：doing、looking。"},
+{"lv": 3, "c": "文法", "q": "She enjoys ___ along the river after dinner.", "a": "walking", "o": ["walking", "walk", "walks", "to walk"], "t": "enjoy 後面接 Ving。enjoy walking。"},
+{"lv": 3, "c": "拼寫", "k": "spell", "q": "We walked ___ the dark forest and found a small house.", "h": "穿越", "a": "through", "p": 0, "t": "through ＝ 穿越。字尾是 -ough，要記熟。"},
+{"lv": 3, "c": "拼寫", "k": "spell", "q": "I'm hungry. I want to eat ___.", "h": "某物；某事", "a": "something", "p": 0, "t": "something ＝ 某物。some + thing，兩個字合在一起。"},
+{"lv": 3, "c": "拼寫", "k": "spell", "q": "Yesterday, the boy ___ a rock into the jar.", "h": "drop 的過去式", "a": "dropped", "p": 0, "t": "drop → dropped，要重複 p。"},
+{"lv": 3, "c": "拼寫", "k": "spell", "q": "They ___ for the bus for twenty minutes yesterday.", "h": "wait 的過去式", "a": "waited", "p": 0, "t": "wait → waited，直接加 ed，不用重複 t。"},
+{"n": 11, "c": "單字", "q": "Mom walked ___ the living room, and we were there waiting for her.", "a": "into", "o": ["along", "into", "until", "above"], "t": "into ＝ 進入。媽媽走進客廳，是從外面到裡面。along 是沿著，until 是直到，above 是在上方。", "lv": 4},
+{"n": 12, "c": "單字", "q": "We must follow the following tips to save our food when we see many ___ in the kitchen.", "a": "ants", "o": ["pools", "jars", "ants", "forests"], "t": "ants ＝ 螞蟻。廚房裡看到很多螞蟻，就要把食物收好。pool、forest 不會出現在廚房。", "lv": 4},
+{"n": 13, "c": "單字", "q": "Most students can ___ the English test because it is so easy.", "a": "pass", "o": ["drop", "fly", "dry", "pass"], "t": "pass the test ＝ 通過考試。drop 是掉落，fly 是飛，dry 是弄乾。", "lv": 4},
+{"n": 14, "c": "單字", "q": "Helen is very ___ and always thinks she's right, even when others don't agree with her.", "a": "proud", "o": ["proud", "close", "top", "clear"], "t": "proud ＝ 驕傲的，這裡指自以為是。close 是靠近，top 是頂端，clear 是清楚的。", "lv": 4},
+{"n": 18, "c": "單字", "q": "Kak found his way to the store by using the ___ on his phone.", "a": "map", "o": ["top", "map", "pool", "beak"], "t": "map ＝ 地圖。用手機上的地圖找路。", "lv": 4},
+{"n": 19, "c": "單字", "q": "Please ___ the paper on the desk and throw it in the trash can.", "a": "pick up", "o": ["give up", "be proud of", "walk along", "pick up"], "t": "pick up ＝ 撿起來。撿起桌上的紙再丟進垃圾桶。give up 是放棄。", "lv": 4},
+{"n": 21, "c": "介系詞／連接詞", "q": "I enjoy taking a cool shower ___ it is very hot.", "a": "when", "o": ["and", "but", "before", "when"], "t": "when ＝ 當…的時候。天氣很熱的時候，我喜歡沖涼。", "lv": 4},
+{"n": 24, "c": "介系詞／連接詞", "q": "I help Mom make cookies ___ I wash my hands.", "a": "after", "o": ["because", "before", "after", "when"], "t": "after ＝ 在…之後。洗完手之後才幫忙做餅乾，順序才合理。", "lv": 4},
+{"n": 25, "c": "文法", "q": "It was a quarter ___ ten. They ___ about the dance festival in the classroom.", "a": "past; were talking", "o": ["to; are talking", "past; were talking", "不填; talked", "不填; talk"], "t": "a quarter past ten ＝ 10:15（過了 15 分）。句子用 was，所以後面是過去進行式 were + Ving。", "lv": 4},
+{"n": 29, "c": "文法", "q": "Sam: I enjoy ___ video games. I always play four hours a day.\nBill: That's a lot of time.", "a": "playing", "o": ["play", "playing", "plays", "to play"], "t": "enjoy 後面接 Ving。enjoy playing。", "lv": 4},
+{"n": 31, "c": "文法", "q": "Leon enjoys ___. He ___ a lot in his free time.", "a": "reading; reads", "o": ["read; reading", "reading; read", "to read; reads", "reading; reads"], "t": "enjoy 後面接 Ving：reading。第二格是現在簡單式，He 是第三人稱單數，動詞加 s：reads。", "lv": 4},
+{"n": 32, "c": "文法", "q": "Peter was thirsty when he was playing games, so he stopped ___ some water.", "a": "to drink", "o": ["and drink", "drinking", "to drink", "drank"], "t": "stop to V ＝ 停下來去做另一件事（停下來喝水）。stop Ving 是停止做某事，意思不一樣。", "lv": 4},
+{"n": 33, "c": "文法", "q": "After Sandy exercises every day, she always ___ a lot of water.", "a": "drinks", "o": ["drinks", "is drinking", "drink", "drank"], "t": "every day、always 表示習慣，用現在簡單式。she 是第三人稱單數，動詞加 s：drinks。", "lv": 4}
 ];
   var LV = { 1: "基礎關", 2: "進階關", 3: "段考挑戰", 4: "考古題" };
   var LV_INFO = {
-    1: "認得單字，會拼單字",
+    1: "第三課全部單字與片語，加動詞的過去式、Ving，有認字、填空、拼寫",
     2: "單複數、過去式、Ving、時間、介系詞",
     3: "句子選擇題加拼寫，難度接近考卷",
     4: "段考考卷裡屬於第三課的題目"
   };
+  // 貼上 Apps Script 網頁應用程式的網址（結尾是 /exec）。留空就不會回傳成績。
+  var REPORT_URL = "";
   var TIME_MC = 25, TIME_SP = 40;
-  var S = { list: [], i: 0, score: 0, streak: 0, wrong: [], seen: {}, lvs: {}, locked: false, timerOn: true, left: 0, limit: 25, tid: null, cur: null };
+  var S = { list: [], i: 0, score: 0, streak: 0, wrong: [], seen: {}, lvs: {}, runName: "", locked: false, timerOn: true, left: 0, limit: 25, tid: null, cur: null };
 
   var $ = function (id) { return document.getElementById(id); };
   function shuffle(a) {
@@ -1218,23 +577,71 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 14px; backg
       lab.htmlFor = id;
       var n = v === "all" ? Q.length : Q.filter(function (q) { return q.lv === v; }).length;
       var b = document.createElement("b"); b.textContent = v === "all" ? "全部闖關" : LV[v];
-      var s = document.createElement("span"); s.textContent = v === "all" ? "第 1 關到第 4 關依序玩" : LV_INFO[v];
-      var c = document.createElement("em"); c.textContent = n + " 題";
+      var s = document.createElement("span"); s.textContent = v === "all" ? "第 1 關到第 4 關依序玩，每關各出你選的題數" : LV_INFO[v];
+      var c = document.createElement("em"); c.textContent = "題庫 " + n;
       lab.appendChild(b); lab.appendChild(s); lab.appendChild(c);
       box.appendChild(inp); box.appendChild(lab);
     });
   }
 
+  function selectedLevels() {
+    var v = document.querySelector('input[name="level"]:checked').value;
+    return v === "all" ? [1, 2, 3, 4] : [parseInt(v, 10)];
+  }
+  function poolOf(l) { return Q.filter(function (q) { return q.lv === l; }); }
+  // 隨機抽題：先讓每個單字各出現一次，題數不夠才補第二題，所以整份單字都有機會輪到
+  function sample(part, n, sh) {
+    if (!sh) return part.slice(0, n);
+    var pool = shuffle(part);
+    if (pool.length <= n) return pool;
+    var seen = {}, first = [], rest = [];
+    pool.forEach(function (q, k) {
+      var key = q.wid || ("q" + k);
+      if (seen[key]) rest.push(q); else { seen[key] = 1; first.push(q); }
+    });
+    var out = first.length >= n ? first.slice(0, n) : first.concat(rest.slice(0, n - first.length));
+    return shuffle(out);
+  }
+  function updateNote() {
+    var n = parseInt(document.querySelector('input[name="count"]:checked').value, 10);
+    var short = selectedLevels().filter(function (l) { return poolOf(l).length < n; })
+      .map(function (l) { return LV[l] + "只有 " + poolOf(l).length + " 題"; });
+    var el = $("countNote");
+    el.hidden = !short.length;
+    el.textContent = short.length ? short.join("、") + "，會全部出完。" : "";
+  }
   function startFresh() {
     var v = document.querySelector('input[name="level"]:checked').value;
     var sh = $("shuffleOn").checked;
-    var lvs = v === "all" ? [1, 2, 3, 4] : [parseInt(v, 10)];
+    var n = parseInt(document.querySelector('input[name="count"]:checked').value, 10);
+    S.runName = v === "all" ? "全部闖關" : LV[v];
+    saveNick();
     var out = [];
-    lvs.forEach(function (l) {
-      var part = Q.filter(function (q) { return q.lv === l; });
-      out = out.concat(sh ? shuffle(part) : part);
-    });
+    selectedLevels().forEach(function (l) { out = out.concat(sample(poolOf(l), n, sh)); });
     begin(out);
+  }
+  function getNick() { return $("nick").value.trim().slice(0, 20); }
+  function saveNick() { try { localStorage.setItem("l3quiz-nick", getNick()); } catch (e) {} }
+  function loadNick() { try { var n = localStorage.getItem("l3quiz-nick"); if (n) $("nick").value = n; } catch (e) {} }
+  function reportPayload() {
+    var lvs = Object.keys(S.lvs).map(function (k) { return LV[k] + " " + S.lvs[k].ok + "/" + S.lvs[k].n; }).join("；");
+    var cats = Object.keys(S.seen).map(function (k) { return k + " " + S.seen[k].ok + "/" + S.seen[k].n; }).join("；");
+    var wrong = S.wrong.map(function (w) {
+      return label(w.q) + "｜" + plain(w.q) + "｜寫了：" + (w.picked === null ? "沒作答" : w.picked) + "｜答案：" + w.q.a;
+    }).join("\n");
+    return { name: getNick() || "未填", level: S.runName, score: S.score, total: S.list.length, levels: lvs, cats: cats, wrong: wrong };
+  }
+  function sendReport() {
+    if (!REPORT_URL) return;
+    var m = $("sendMsg"), r = $("resendBtn");
+    m.hidden = false; r.hidden = true;
+    m.textContent = "正在把成績傳給老師……";
+    var p;
+    try {
+      p = fetch(REPORT_URL, { method: "POST", mode: "no-cors", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(reportPayload()) });
+    } catch (e) { p = Promise.reject(e); }
+    p.then(function () { m.textContent = "成績已傳給老師。"; },
+      function () { m.textContent = "沒有傳送成功。請按下面的「複製錯題清單」貼給老師，或再傳一次。"; r.hidden = false; });
   }
   function begin(list) {
     S.list = list; S.i = 0; S.score = 0; S.streak = 0; S.wrong = []; S.seen = {}; S.lvs = {};
@@ -1245,7 +652,10 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 14px; backg
   }
   function pat(q) {
     var out = [];
-    for (var i = 0; i < q.a.length; i++) out.push(i === 0 && q.p === 1 ? q.a.charAt(i) : "_");
+    for (var i = 0; i < q.a.length; i++) {
+      var ch = q.a.charAt(i);
+      out.push(ch === " " ? "\u00A0" : (i === 0 && q.p === 1 ? ch : "_"));
+    }
     return out.join(" ");
   }
   function renderQ() {
@@ -1311,7 +721,7 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 14px; backg
     S.locked = true;
     clearInterval(S.tid);
     var q = S.cur, sp = q.k === "spell";
-    var ok = sp ? (pick !== null && norm(pick) === norm(q.a)) : pick === q.a;
+    var ok = sp ? (pick !== null && [q.a].concat(q.alt || []).some(function (x) { return norm(pick) === norm(x); })) : pick === q.a;
     if (sp) {
       var inp = $("spIn");
       inp.disabled = true; inp.classList.add(ok ? "ok" : "no");
@@ -1390,6 +800,8 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 14px; backg
     $("retryBtn").hidden = none;
     $("copyArea").hidden = true;
     show("result");
+    $("sendMsg").hidden = true; $("resendBtn").hidden = true;
+    sendReport();
   }
   function copyText() {
     var lines = ["Book 3 L3 快問快答：" + S.score + " / " + S.list.length, "", "答錯的題目："];
@@ -1405,10 +817,17 @@ textarea { width: 100%; min-height: 120px; font: inherit; font-size: 14px; backg
   }
 
   buildLevels();
+  document.addEventListener("change", function (e) {
+    if (e.target && (e.target.name === "level" || e.target.name === "count")) updateNote();
+  });
+  updateNote();
+  $("nickBox").hidden = !REPORT_URL;
+  loadNick();
+  $("resendBtn").addEventListener("click", sendReport);
   $("goBtn").addEventListener("click", startFresh);
   $("nextBtn").addEventListener("click", next);
   $("againBtn").addEventListener("click", function () { show("start"); });
-  $("retryBtn").addEventListener("click", function () { begin(shuffle(S.wrong.map(function (w) { return w.q; }))); });
+  $("retryBtn").addEventListener("click", function () { S.runName = "練習錯題"; begin(shuffle(S.wrong.map(function (w) { return w.q; }))); });
   $("spGo").addEventListener("click", submitSpell);
   $("spSkip").addEventListener("click", function () { answer(null, "skip"); });
   $("spIn").addEventListener("keydown", function (e) {
